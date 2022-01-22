@@ -1,0 +1,29 @@
+{
+  "name": "eboubaker/scrapper",
+  "description": "Web-Scrapper(remote) example in php",
+  "type": "project",
+  "require": {
+    "php": ">=7.4",
+    "ext-curl": "*",
+    "php-webdriver/webdriver": "^1.12"
+  },
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Eboubaker Bekkouche",
+      "email": "eboubakkar@gmail.com"
+    }
+  ],
+  "autoload": {
+    "files": [
+      "src/helpers.php"
+    ],
+    "psr-4": {
+      "Eboubaker\\Scrapper\\": "src/"
+    }
+  },
+  "scripts": {
+    "test" : "php src/scrapper.php https://www.reddit.com/r/factorio/comments/lj5pb8",
+    "scrap" : "php src/scrapper.php"
+  }
+}

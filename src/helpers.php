@@ -21,10 +21,12 @@ function info(string $msg, ...$args)
 {
     printf(style("[INFO]", "cyan", "bold") . " " . str_replace("{}", "%s", $msg) . "\n", ...$args);
 }
+
 function notice(string $msg, ...$args)
 {
     printf(style("[NOTICE]", "red", "yellow", "bold") . " " . str_replace("{}", "%s", $msg) . "\n", ...$args);
 }
+
 function error(string $msg, ...$args)
 {
     printf(style("[ERROR]", "white", "redbg", "bold") . " " . str_replace("{}", "%s", $msg) . "\n", ...$args);
@@ -38,4 +40,14 @@ function warn(string $msg, ...$args)
 function debug(string $msg, ...$args)
 {
     printf(style("[DEBUG]", "blue", "bold") . " " . str_replace("{}", "%s", $msg) . "\n", ...$args);
+}
+
+function host_is_windows_machine(): bool
+{
+    return DIRECTORY_SEPARATOR === '\\';
+}
+
+function dump_exception(Exception $e)
+{
+    dump((object)["exception" => $e, "cause" => $e->getPrevious()]);
 }

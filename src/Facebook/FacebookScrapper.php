@@ -27,11 +27,8 @@ class FacebookScrapper extends Scrapper
                 throw new ExpectationFailedException("No Media elements were found on this post url: $post_url");
             }
         } catch (Exception $e) {
-            echo "Failed to locate media element in url $post_url\n";
-            echo "Attempting to make a screenshot of the browser\n";
-            $this->driver->takeScreenshot("screenshot.png");
-            echo "Screenshot saved as screenshot.png\n";
-            $this->close(true);
+            error("Failed to locate media element in url $post_url");
+            $this->close();
             throw $e;
         }
     }
@@ -44,10 +41,25 @@ class FacebookScrapper extends Scrapper
     function extract_static_video_url($post_url): string
     {
         $script = <<<JS
-        document.querySelector('[aria-label="Unmute"]').click()
+        var respond = arguments[0];
+        var container = document.querySelector('div[role="presentation"]');
+        var soundControls = () => document.querySelector('[aria-label="Unmute"],[aria-label="Mute"]');
+        if(!soundControls()){
+            container.click();
+            var checkExist = setInterval(function() {
+               if (soundControls()) {
+                  clearInterval(checkExist);
+                  var sound = document.querySelector('[aria-label="Unmute"]');
+                  if(sound) sound.click()
+                  respond(true)
+               }
+            }, 100);
+        }
         JS;
+        debug("taking screenshot");
+        $this->driver->takeScreenshot("screenshot1.png");
         debug("Clicking unmute button");
-        $this->driver->executeScript($script);
+        $this->driver->executeAsyncScript($script);
         debug("Refreshing webpage");
         $this->driver->navigate()->refresh();
         debug("waiting for video to appear");
@@ -93,8 +105,8 @@ class FacebookScrapper extends Scrapper
     function getPostType($post_url): int
     {
         try {
-            $this->driver->findElements(WebDriverBy::cssSelector('[aria-label="Mute"], [aria-label="Unmute"]'))[0];
-            return TYPE_VIDEO;
+            $elems = $this->driver->findElements(WebDriverBy::cssSelector('[aria-label="Mute"], [aria-label="Unmute"]'));
+            if (count($elems) > 0) return TYPE_VIDEO;
         } catch (NoSuchElementException $e) {
             // url is not a video
         }

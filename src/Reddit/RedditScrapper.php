@@ -62,7 +62,7 @@ class RedditScrapper extends Scrapper
             echo "Attempting to make a screenshot of the browser\n";
             $this->driver->takeScreenshot("screenshot.png");
             echo "Screenshot saved as screenshot.png\n";
-            $this->close(true);
+            $this->close();
             throw $e;
         }
     }

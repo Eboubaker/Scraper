@@ -9,8 +9,11 @@ require 'vendor/autoload.php';
 
 use Eboubaker\Scrapper\Contracts\Scrapper;
 use Exception;
+use Facebook\WebDriver\Exception\InvalidSessionIdException;
+use Facebook\WebDriver\Exception\WebDriverCurlException;
 use Facebook\WebDriver\Remote\DesiredCapabilities;
 use Facebook\WebDriver\Remote\RemoteWebDriver;
+use Facebook\WebDriver\WebDriverDimension;
 
 /**
  * @throws Exception
@@ -31,6 +34,10 @@ function main(int $argc, array $argv)
             $driver = RemoteWebDriver::createBySessionID($sessionId, $driverUrl, 60000, 60000);
             info("Connected to driver {} with session {}", $driverUrl, style($driver->getSessionID(), "green"));
         }
+        $driver->manage()->window()->setSize(new WebDriverDimension(1366, 768));
+    } catch (InvalidSessionIdException $e) {
+        error("Invalid sessionId {}", $sessionId);
+        exit;
     } catch (Exception $e) {
         error("Failed to connect to the driver, maybe the queue size is full?", 1, $e);
         throw $e;
@@ -38,11 +45,12 @@ function main(int $argc, array $argv)
     try {
         info("Navigating to {}", $url);
         $driver->navigate()->to($url);
-    } catch (Exception $e) {
+    } catch (WebDriverCurlException $e) {
         notice("If the webpage is not responding, make sure the webdriver has enough memory");
         $driver->close();
         throw $e;
     }
+    $scrapper = null;
     try {
         $currentUrl = $driver->getCurrentURL();
         info("current url is {}", $currentUrl);
@@ -51,25 +59,31 @@ function main(int $argc, array $argv)
         info("using {}", get_class($scrapper));
         $scrapper->download_media_from_post_url($url);
     } catch (Exception $e) {
+        dump_exception($e);
+        if ($scrapper) $scrapper->close();
         try {
+            info("an error occurred, attempting to take a screenshot of the webpage...");
             $driver->takeScreenshot("screenshot.png");
+            if (filesize("screenshot.png") === 0) throw new Exception();
             notice("a screenshot of the webpage was saved as ./screenshot.png, do you want to open it now?");
             printf("Open screenshot?(Y/N):");
             $line = rtrim(fgets(STDIN));
-            if($line === 'y' || $line === 'Y'){
+            if ($line === 'y' || $line === 'Y') {
                 // TODO: avoid system()
-                system("open screenshot.png");
+                if (host_is_windows_machine()) system("explorer.exe screenshot.png");
+                else system("open screenshot.png");
             }
-        } finally {
-            throw $e;
+        } catch (Exception $e) {
+            error("could not save screenshot");
         }
     }
-    $scrapper->close();
 }
 
 
 try {
     main($argc, $argv);
 } catch (Exception $e) {
-    dd($e);
+    dump_exception($e);
+    exit;
 }
+

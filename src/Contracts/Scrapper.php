@@ -13,10 +13,12 @@ define("TYPE_IMAGE", 1);
 abstract class Scrapper
 {
     protected RemoteWebDriver $driver;
+    protected bool $wasClosed;
 
     public function __construct(RemoteWebDriver $driver)
     {
         $this->driver = $driver;
+        $this->wasClosed = false;
     }
 
     /**
@@ -62,33 +64,35 @@ abstract class Scrapper
     /**
      * close any resources used by the scrapper such as the Webdriver connection
      */
-    public function close($exceptionRaised = false)
+    public function close()
     {
-        if ($exceptionRaised) {
-            info("An Exception occurred..., closing driver session");
+        if (!$this->wasClosed) {
+            info("sending close signal");
+            try {
+                $this->driver->close();
+                $this->wasClosed = true;
+            } catch (Exception $e) {
+                error("Failed to close window");
+            }
         } else {
-            info("Closing driver session");
+            debug("driver was already closed");
         }
-        $this->driver->quit();
     }
-
 
     /**
      * @throws Exception if failed to determine required scrapper
      */
-    public static function getRequiredScrapper(string $url, RemoteWebDriver $driver): Scrapper
+    public
+    static function getRequiredScrapper(string $url, RemoteWebDriver $driver): Scrapper
     {
-        switch ($url) {
-            case preg_match("/https?:\/\/(m|www)\.reddit\.com\/r\/.*\/comments\/.*/", $url):
-                return new RedditScrapper($driver);
-            case preg_match("/https?:\/\/(www)\.facebook\.com\//", $url):
-                return new FacebookScrapper($driver);
-            default:
-                // TODO: add pr request link for new scrapper
-                warn("{} is probably not supported", $url);
-                // TODO: add how to do login when it is implemented
-                notice("if the post url is private you might need to login first");
-                throw new Exception("Could not determine which extractor to use");
-        }
+        if (preg_match("/https?:\/\/(m|www)\.reddit\.com\/r\/.*\/comments\/.*/", $url))
+            return new RedditScrapper($driver);
+        else if (preg_match("/https?:\/\/(web|m|www)\.facebook\.com\//", $url))
+            return new FacebookScrapper($driver);
+        // TODO: add pr request link for new scrapper
+        warn("{} is probably not supported", $url);
+        // TODO: add how to do login when it is implemented
+        notice("if the post url is private you might need to login first");
+        throw new Exception("Could not determine which extractor to use");
     }
 }

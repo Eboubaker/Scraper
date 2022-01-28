@@ -1,11 +1,12 @@
 {
   "name": "eboubaker/scrapper",
-  "description": "Web-Scrapper(remote) example in php",
+  "description": "CLI based Web Media-Scrapper in PHP",
   "type": "project",
   "require": {
     "php": ">=7.4",
     "ext-curl": "*",
-    "php-webdriver/webdriver": "^1.12"
+    "php-webdriver/webdriver": "^1.12",
+    "symfony/var-dumper": "v5.4.2"
   },
   "license": "MIT",
   "authors": [
@@ -23,7 +24,7 @@
     }
   },
   "scripts": {
-    "test" : "php src/scrapper.php https://www.reddit.com/r/factorio/comments/lj5pb8",
-    "scrap" : "php src/scrapper.php"
+    "test": "php src/scrapper.php https://www.reddit.com/r/factorio/comments/lj5pb8",
+    "scrap": "php src/scrapper.php"
   }
 }

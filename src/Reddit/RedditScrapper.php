@@ -45,11 +45,6 @@ class RedditScrapper extends Scrapper
     function download_media_from_post_url($post_url)
     {
         try {
-            // as in http://www.reddit.com/r/factorio/comments/lj5pb8
-            if (!preg_match("/https?:\/\/(m|www)\.reddit\.com\/r\/.*\/comments\/.*/", $post_url)) {
-                throw new Exception("The url is not a valid reddit post");
-            }
-
             echo "Loading url $post_url\n";
             $this->driver->get($post_url);
             echo "Finding media element\n";

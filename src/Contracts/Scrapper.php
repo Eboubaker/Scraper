@@ -8,7 +8,7 @@ use Exception;
 use Facebook\WebDriver\Remote\RemoteWebDriver;
 
 define("TYPE_VIDEO", 1);
-define("TYPE_IMAGE", 1);
+define("TYPE_IMAGE", 2);
 
 abstract class Scrapper
 {

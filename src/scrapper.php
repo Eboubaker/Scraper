@@ -8,6 +8,7 @@ error_reporting(E_ALL);
 require 'vendor/autoload.php';
 
 use Eboubaker\Scrapper\Contracts\Scrapper;
+use Eboubaker\Scrapper\Exceptions\ExpectationFailedException;
 use Exception;
 use Facebook\WebDriver\Exception\InvalidSessionIdException;
 use Facebook\WebDriver\Exception\WebDriverCurlException;
@@ -56,10 +57,13 @@ function main(int $argc, array $argv)
         info("current url is {}", $currentUrl);
         info("attempting to determine which extractor to use");
         $scrapper = Scrapper::getRequiredScrapper($currentUrl, $driver);
-        info("using {}", get_class($scrapper));
+        info("using {}", (new \ReflectionClass($scrapper))->getShortName());
         $scrapper->download_media_from_post_url($url);
     } catch (Exception $e) {
-        dump_exception($e);
+        if ($e instanceof ExpectationFailedException)
+            error($e->getMessage());
+        else
+            dump_exception($e);
         if ($scrapper) $scrapper->close();
         try {
             info("an error occurred, attempting to take a screenshot of the webpage...");

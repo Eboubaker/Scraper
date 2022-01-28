@@ -6,8 +6,8 @@ use Eboubaker\Scrapper\Contracts\Scrapper;
 use Eboubaker\Scrapper\Exceptions\ExpectationFailedException;
 use Exception;
 use Facebook\WebDriver\Exception\NoSuchElementException;
+use Facebook\WebDriver\Remote\RemoteWebElement;
 use Facebook\WebDriver\WebDriverBy;
-use Facebook\WebDriver\WebDriverExpectedCondition;
 
 class FacebookScrapper extends Scrapper
 {
@@ -16,13 +16,21 @@ class FacebookScrapper extends Scrapper
         return parent::probe_file_name($url);
     }
 
+    /**
+     * @throws NoSuchElementException
+     * @throws ExpectationFailedException
+     * @throws \Facebook\WebDriver\Exception\TimeoutException
+     */
     function download_media_from_post_url($post_url)
     {
         try {
-            $type = $this->getPostType($post_url);
+            $type = $this->getPostType($post_url, $postNode);
             if ($type === TYPE_VIDEO) {
-                $url = $this->extract_static_video_url($post_url);
+                $url = $this->extract_static_video_url($post_url, $postNode);
                 debug("static video url is {}", $url);
+            } else if ($type === TYPE_IMAGE) {
+                error("Image Downloads for Facebook are not implemented");
+                exit;
             } else {
                 throw new ExpectationFailedException("No Media elements were found on this post url: $post_url");
             }
@@ -38,39 +46,35 @@ class FacebookScrapper extends Scrapper
      * @throws \Facebook\WebDriver\Exception\TimeoutException
      * @throws ExpectationFailedException
      */
-    function extract_static_video_url($post_url): string
+    function extract_static_video_url($post_url, RemoteWebElement $postNode): string
     {
-        $script = <<<JS
-        var respond = arguments[0];
-        var container = document.querySelector('div[role="presentation"]');
-        var soundControls = () => document.querySelector('[aria-label="Unmute"],[aria-label="Mute"]');
-        if(!soundControls()){
-            container.click();
-            var checkExist = setInterval(function() {
-               if (soundControls()) {
-                  clearInterval(checkExist);
-                  var sound = document.querySelector('[aria-label="Unmute"]');
-                  if(sound) sound.click()
-                  respond(true)
-               }
-            }, 100);
-        }
-        JS;
-        debug("taking screenshot");
-        $this->driver->takeScreenshot("screenshot1.png");
-        debug("Clicking unmute button");
-        $this->driver->executeAsyncScript($script);
-        debug("Refreshing webpage");
-        $this->driver->navigate()->refresh();
-        debug("waiting for video to appear");
-        $this->driver->wait()->until(WebDriverExpectedCondition::visibilityOfAnyElementLocated(WebDriverBy::cssSelector('[aria-label="Play"], [aria-label="Pause"]')));
-        try {
-            debug("Clicking play button");
-            $this->driver->findElement(WebDriverBy::cssSelector('[aria-label="Play"]'))->click();
-        } /** @noinspection PhpRedundantCatchClauseInspection */
-        catch (NoSuchElementException $e) {
-            debug("Play button not found, Skipped clicking the play button");
-        }
+        $clickPlay = function () {
+            try {
+                debug("Clicking play button");
+                $play = $this->driver->findElement(WebDriverBy::cssSelector('[aria-label="Play video"],[aria-label="Play"]'));
+                /** @noinspection PhpParamsInspection */
+                dump($this->driver->executeScript("arguments[0].click();", $play));
+                debug("play button was clicked");
+            } catch (NoSuchElementException $e) {
+                debug("Play button not found, Skipped clicking the play button");
+            }
+        };
+        $clickUnmute = function () use ($postNode, $clickPlay) {
+            try {
+                debug("Clicking Unmute button");
+                $control = $postNode->findElement(WebDriverBy::cssSelector('[aria-label="Unmute"]'));
+                /** @noinspection PhpParamsInspection */
+                dump($this->driver->executeScript("arguments[0].click();", $control));
+                debug("Unmute button was clicked");
+                debug("Refreshing page");
+                $this->driver->navigate()->refresh();
+                $clickPlay();
+            } catch (NoSuchElementException $e) {
+                debug("Unmute button not found, Skipped clicking the Unmute button");
+            }
+        };
+        $clickPlay();
+        $clickUnmute();
         $script = <<<JS
         var performance = window.performance || window.mozPerformance || window.msPerformance || window.webkitPerformance || {}
         var traffic = performance.getEntries() || []
@@ -95,21 +99,28 @@ class FacebookScrapper extends Scrapper
         debug("pulling video url");
         $result = $this->driver->executeScript($script)[0];
         if(is_numeric($result)){
-            throw new ExpectationFailedException("Static video url not found");
+            throw new ExpectationFailedException("The video was not played on the webpage, video url not found");
         }
         dump($result);
-        debug("Found {} possible urls, picking first one {}", count($result), $result[0]);
+        debug("Found {} possible urls, picking first one {}", style(count($result), "blue"), $result[0]);
         return $result[0];
     }
 
-    function getPostType($post_url): int
+    function getPostType($post_url, &$postNode): int
     {
         try {
-            $elems = $this->driver->findElements(WebDriverBy::cssSelector('[aria-label="Mute"], [aria-label="Unmute"]'));
-            if (count($elems) > 0) return TYPE_VIDEO;
+            $postNode = $this->driver->findElement(WebDriverBy::cssSelector('[data-pagelet="MediaViewerPhoto"],[data-pagelet="WatchPermalinkVideo"]'));
+            dump($postNode);
+            switch ($postNode->getAttribute("data-pagelet")) {
+                case "MediaViewerPhoto":
+                    return TYPE_IMAGE;
+                case "WatchPermalinkVideo":
+                    return TYPE_VIDEO;
+            }
         } catch (NoSuchElementException $e) {
-            // url is not a video
+            debug($e->getMessage(), $e->getFile(), $e->getLine());
         }
+        debug("post container did not match any type");
         return -1;
     }
 }

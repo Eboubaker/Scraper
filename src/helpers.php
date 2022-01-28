@@ -51,3 +51,8 @@ function dump_exception(Exception $e)
 {
     dump((object)["exception" => $e, "cause" => $e->getPrevious()]);
 }
+
+function endc(array $a)
+{
+    return end($a);
+}

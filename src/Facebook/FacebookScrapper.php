@@ -6,8 +6,10 @@ use Eboubaker\Scrapper\Contracts\Scrapper;
 use Eboubaker\Scrapper\Exceptions\ExpectationFailedException;
 use Exception;
 use Facebook\WebDriver\Exception\NoSuchElementException;
+use Facebook\WebDriver\Exception\TimeoutException;
 use Facebook\WebDriver\Remote\RemoteWebElement;
 use Facebook\WebDriver\WebDriverBy;
+use Facebook\WebDriver\WebDriverExpectedCondition;
 
 class FacebookScrapper extends Scrapper
 {
@@ -52,8 +54,7 @@ class FacebookScrapper extends Scrapper
             try {
                 debug("Clicking play button");
                 $play = $this->driver->findElement(WebDriverBy::cssSelector('[aria-label="Play video"],[aria-label="Play"]'));
-                /** @noinspection PhpParamsInspection */
-                dump($this->driver->executeScript("arguments[0].click();", $play));
+                $this->driver->executeScript("arguments[0].click();", [$play]);
                 debug("play button was clicked");
             } catch (NoSuchElementException $e) {
                 debug("Play button not found, Skipped clicking the play button");
@@ -63,8 +64,7 @@ class FacebookScrapper extends Scrapper
             try {
                 debug("Clicking Unmute button");
                 $control = $postNode->findElement(WebDriverBy::cssSelector('[aria-label="Unmute"]'));
-                /** @noinspection PhpParamsInspection */
-                dump($this->driver->executeScript("arguments[0].click();", $control));
+                $this->driver->executeScript("arguments[0].click();", [$control]);
                 debug("Unmute button was clicked");
                 debug("Refreshing page");
                 $this->driver->navigate()->refresh();
@@ -75,6 +75,7 @@ class FacebookScrapper extends Scrapper
         };
         $clickPlay();
         $clickUnmute();
+        sleep(3);
         $script = <<<JS
         var performance = window.performance || window.mozPerformance || window.msPerformance || window.webkitPerformance || {}
         var traffic = performance.getEntries() || []
@@ -91,25 +92,43 @@ class FacebookScrapper extends Scrapper
             }
             return score(u2) - score(u1) 
         })
-        urls = possibleUrls.map(e => e.split('&').filter(s => !s.contains('bytestart=') && !s.contains('byteend=')).join('&'))
+        urls = possibleUrls.map(e => e.split('&').filter(s => !s.contains('bytestart=') && !s.contains('byteend=')).join('&')).map(e => encodeURI(e))
         urls = [...new Set(urls)].slice(0, 5)
         if(urls.length === 0) return 0 
         return urls
         JS;
         debug("pulling video url");
-        $result = $this->driver->executeScript($script)[0];
-        if(is_numeric($result)){
+        $result = $this->driver->executeScript($script);
+        $result = array_map(fn($u) => str_replace([' ', "\n", "\r"], '', $u), $result);
+
+        dump("result is", $result);
+        if (is_numeric($result)) {
             throw new ExpectationFailedException("The video was not played on the webpage, video url not found");
         }
+        debug("Found {} possible urls", style(count($result), "blue"));
+        $ffprobe = \FFMpeg\FFProbe::create();
+        $result = array_map(function ($u) use ($ffprobe) {
+            $video = $ffprobe
+                ->streams($u)
+                ->videos()
+                ->first();
+            $audio = $ffprobe
+                ->streams($u)
+                ->audios()
+                ->first();
+            return $video ?? $audio;
+        }, $result);
         dump($result);
-        debug("Found {} possible urls, picking first one {}", style(count($result), "blue"), $result[0]);
         return $result[0];
     }
 
     function getPostType($post_url, &$postNode): int
     {
         try {
-            $postNode = $this->driver->findElement(WebDriverBy::cssSelector('[data-pagelet="MediaViewerPhoto"],[data-pagelet="WatchPermalinkVideo"]'));
+            /**
+             * @var RemoteWebElement $postNode
+             */
+            $postNode = $this->driver->wait()->until(WebDriverExpectedCondition::visibilityOfElementLocated(WebDriverBy::cssSelector('[data-pagelet="MediaViewerPhoto"],[data-pagelet="WatchPermalinkVideo"]')));
             dump($postNode);
             switch ($postNode->getAttribute("data-pagelet")) {
                 case "MediaViewerPhoto":
@@ -117,7 +136,7 @@ class FacebookScrapper extends Scrapper
                 case "WatchPermalinkVideo":
                     return TYPE_VIDEO;
             }
-        } catch (NoSuchElementException $e) {
+        } catch (NoSuchElementException | TimeoutException $e) {
             debug($e->getMessage(), $e->getFile(), $e->getLine());
         }
         debug("post container did not match any type");

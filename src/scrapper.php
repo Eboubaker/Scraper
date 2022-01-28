@@ -21,14 +21,14 @@ use Facebook\WebDriver\WebDriverDimension;
  */
 function main(int $argc, array $argv)
 {
-    $url = $argv[1];
-    $driverUrl = "https://eboubaker.xyz:8800";
+    $url = $argv[1] ?? '';
+    $driverUrl = "http://localhost:4444";
     $sessionId = '';
     info("establishing connection with driver {}", $driverUrl);
     try {
         $capabilities = DesiredCapabilities::chrome();
         if (empty($sessionId)) {
-            warn("Connecting without a sessionId, creating a new session will take some time");
+//            warn("Connecting without a sessionId, creating a new session will take some time");
             $driver = RemoteWebDriver::create($driverUrl, $capabilities, 60000, 60000);
             info("Connected to driver {} with a new session {}", $driverUrl, style($driver->getSessionID(), "green"));
         } else {
@@ -68,7 +68,7 @@ function main(int $argc, array $argv)
         try {
             info("an error occurred, attempting to take a screenshot of the webpage...");
             $driver->takeScreenshot("screenshot.png");
-            if (filesize("screenshot.png") === 0) throw new Exception();
+            if (filesize("screenshot.png") > 4096) throw new Exception();
             notice("a screenshot of the webpage was saved as ./screenshot.png, do you want to open it now?");
             printf("Open screenshot?(Y/N):");
             $line = rtrim(fgets(STDIN));

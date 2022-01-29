@@ -17,29 +17,34 @@ function style(string $text, ...$styles): string
     return "\e[" . implode(';', $formatMap) . 'm' . $text . "\e[0m";
 }
 
+function format(string $text, ...$args): string
+{
+    return sprintf(str_replace("{}", "%s", $text), ...$args);
+}
+
 function info(string $msg, ...$args)
 {
-    printf(style("[INFO]", "cyan", "bold") . " " . str_replace("{}", "%s", $msg) . "\n", ...$args);
+    echo style("[INFO] ", "cyan", "bold") . format($msg, ...$args) . "\n";
 }
 
 function notice(string $msg, ...$args)
 {
-    printf(style("[NOTICE]", "red", "yellow", "bold") . " " . str_replace("{}", "%s", $msg) . "\n", ...$args);
+    echo style("[NOTICE] ", "red", "yellow", "bold") . format($msg, ...$args) . "\n";
 }
 
 function error(string $msg, ...$args)
 {
-    printf(style("[ERROR]", "white", "redbg", "bold") . " " . str_replace("{}", "%s", $msg) . "\n", ...$args);
+    echo style("[ERROR] ", "white", "redbg", "bold") . format($msg, ...$args) . "\n";
 }
 
 function warn(string $msg, ...$args)
 {
-    printf(style("[WARN]", "yellow", "bold") . " " . str_replace("{}", "%s", $msg) . "\n", ...$args);
+    echo style("[WARN] ", "yellow", "bold") . format($msg, ...$args) . "\n";
 }
 
 function debug(string $msg, ...$args)
 {
-    printf(style("[DEBUG]", "blue", "bold") . " " . str_replace("{}", "%s", $msg) . "\n", ...$args);
+    echo style("[DEBUG] ", "blue", "bold") . format($msg, ...$args) . "\n";
 }
 
 function host_is_windows_machine(): bool
@@ -49,29 +54,5 @@ function host_is_windows_machine(): bool
 
 function dump_exception(Exception $e)
 {
-    dump((object)["exception" => $e, "cause" => $e->getPrevious()]);
-}
-
-function endc(array $a)
-{
-    return end($a);
-}
-
-function encodeURI($url): string
-{
-    // http://php.net/manual/en/function.rawurlencode.php
-    // https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/encodeURI
-    $unescaped = array(
-        '%2D' => '-', '%5F' => '_', '%2E' => '.', '%21' => '!', '%7E' => '~',
-        '%2A' => '*', '%27' => "'", '%28' => '(', '%29' => ')'
-    );
-    $reserved = array(
-        '%3B' => ';', '%2C' => ',', '%2F' => '/', '%3F' => '?', '%3A' => ':',
-        '%40' => '@', '%26' => '&', '%3D' => '=', '%2B' => '+', '%24' => '$'
-    );
-    $score = array(
-        '%23' => '#'
-    );
-    return strtr(rawurlencode($url), array_merge($reserved, $unescaped, $score));
-
+    dump((object)["error" => $e->getMessage(), "exception" => $e, "cause" => $e->getPrevious()]);
 }

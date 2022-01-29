@@ -1,6 +1,6 @@
 <?php
 
-namespace Eboubaker\Scrapper\Reddit;
+namespace Eboubaker\Scrapper\Scrappers;
 
 use Eboubaker\Scrapper\Contracts\Scrapper;
 use Exception;
@@ -8,6 +8,11 @@ use Facebook\WebDriver\WebDriverBy;
 
 class RedditScrapper extends Scrapper
 {
+    public static function can_scrap($url): bool
+    {
+        return preg_match("/https?:\/\/(m|www)\.reddit\.com\/r\/.*\/comments\/.*/", $url);
+    }
+
     /**
      * @throws Exception
      */
@@ -55,5 +60,7 @@ class RedditScrapper extends Scrapper
             throw $e;
         }
     }
+
+
 }
 

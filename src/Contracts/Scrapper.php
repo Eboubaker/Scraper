@@ -2,8 +2,9 @@
 
 namespace Eboubaker\Scrapper\Contracts;
 
-use Eboubaker\Scrapper\Facebook\FacebookScrapper;
-use Eboubaker\Scrapper\Reddit\RedditScrapper;
+use Eboubaker\Scrapper\Exception\UrlNotSupportedException;
+use Eboubaker\Scrapper\Scrappers\FacebookScrapper;
+use Eboubaker\Scrapper\Scrappers\RedditScrapper;
 use Exception;
 use Facebook\WebDriver\Remote\RemoteWebDriver;
 
@@ -80,19 +81,27 @@ abstract class Scrapper
     }
 
     /**
-     * @throws Exception if failed to determine required scrapper
+     * returns the proper scrapper that can handle the given url.
+     * The url must be a final url meaning it should not do a redirect to a different url.
+     *
+     * @throws UrlNotSupportedException if failed to determine required scrapper
      */
-    public
-    static function getRequiredScrapper(string $url, RemoteWebDriver $driver): Scrapper
+    public static function getRequiredScrapper(string $url, RemoteWebDriver $driver): Scrapper
     {
-        if (preg_match("/https?:\/\/(m|www)\.reddit\.com\/r\/.*\/comments\/.*/", $url))
+        if (RedditScrapper::can_scrap($url))
             return new RedditScrapper($driver);
-        else if (preg_match("/https?:\/\/(web|m|www)\.facebook\.com\//", $url))
+        else if (FacebookScrapper::can_scrap($url))
             return new FacebookScrapper($driver);
         // TODO: add pr request link for new scrapper
         warn("{} is probably not supported", $url);
         // TODO: add how to do login when it is implemented
         notice("if the post url is private you might need to login first");
-        throw new Exception("Could not determine which extractor to use");
+        throw new UrlNotSupportedException("Could not determine which extractor to use");
     }
+
+    /**
+     * returns true if the url can be handled by this scrapper.
+     * The function should return a boolean and should not raise any exceptions.
+     */
+    public static abstract function can_scrap($url): bool;
 }

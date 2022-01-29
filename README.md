@@ -6,6 +6,7 @@ PHP cli-based program to scrap media from websites that only work with javascrip
 - composer
 - php-curl extension
 - a webdriver
+- ffmpeg binaries
 
 # Installation
 ```console
@@ -32,12 +33,26 @@ function main(){
     $driverUrl = "https://localhost:4444";
 ```
 # RoadMap
-#### 🔃 Implement Reddit scrapper
+
+### 🔃 Implement Reddit scrapper
+
 - ✅ download image from a post url
 - 🔃 download video from a post url
 - 🔃 download GIF from a post url
 - 🔃 download media from user feed
+
 ### 🔃 Implement Facebook scrapper
+
+- 🔃 download image from a post url
+- ✅ download video from a post url
+- 🔃 download video from a story
+- 🔃 download image from a story
+- 🔃 download media from user feed
+
+### 🔃 Implement Instagram scrapper
+
 - 🔃 download image from a post url
 - 🔃 download video from a post url
+- 🔃 download video from a story
+- 🔃 download image from a story
 - 🔃 download media from user feed

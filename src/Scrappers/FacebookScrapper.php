@@ -1,26 +1,28 @@
 <?php
 
-namespace Eboubaker\Scrapper\Facebook;
+namespace Eboubaker\Scrapper\Scrappers;
 
 use Eboubaker\Scrapper\Contracts\Scrapper;
-use Eboubaker\Scrapper\Exceptions\ExpectationFailedException;
+use Eboubaker\Scrapper\Exception\DriverConnectionException;
 use Exception;
 use Facebook\WebDriver\Exception\NoSuchElementException;
 use Facebook\WebDriver\Exception\TimeoutException;
 use Facebook\WebDriver\Remote\RemoteWebElement;
 use Facebook\WebDriver\WebDriverBy;
 use Facebook\WebDriver\WebDriverExpectedCondition;
+use FFMpeg\FFProbe\DataMapping\StreamCollection;
+use Tightenco\Collect\Support\Collection;
 
 class FacebookScrapper extends Scrapper
 {
-    public function probe_file_name(string $url): string
+    public static function can_scrap($url): bool
     {
-        return parent::probe_file_name($url);
+        return preg_match("/https?:\/\/(web|m|www)\.facebook\.com\//", $url);
     }
 
     /**
      * @throws NoSuchElementException
-     * @throws ExpectationFailedException
+     * @throws DriverConnectionException
      * @throws \Facebook\WebDriver\Exception\TimeoutException
      */
     function download_media_from_post_url($post_url)
@@ -28,13 +30,15 @@ class FacebookScrapper extends Scrapper
         try {
             $type = $this->getPostType($post_url, $postNode);
             if ($type === TYPE_VIDEO) {
-                $url = $this->extract_static_video_url($post_url, $postNode);
-                debug("static video url is {}", $url);
+                /**
+                 * @var StreamCollection[] $found_streams
+                 */
+                $found_streams = $this->extract_static_video_sources($post_url, $postNode);
             } else if ($type === TYPE_IMAGE) {
                 error("Image Downloads for Facebook are not implemented");
                 exit;
             } else {
-                throw new ExpectationFailedException("No Media elements were found on this post url: $post_url");
+                throw new DriverConnectionException("No Media elements were found on this post url: $post_url");
             }
         } catch (Exception $e) {
             error("Failed to locate media element in url $post_url");
@@ -46,9 +50,9 @@ class FacebookScrapper extends Scrapper
     /**
      * @throws NoSuchElementException
      * @throws \Facebook\WebDriver\Exception\TimeoutException
-     * @throws ExpectationFailedException
+     * @throws DriverConnectionException
      */
-    function extract_static_video_url($post_url, RemoteWebElement $postNode): string
+    function extract_static_video_sources($post_url, RemoteWebElement $postNode): Collection
     {
         $clickPlay = function () {
             try {
@@ -68,13 +72,14 @@ class FacebookScrapper extends Scrapper
                 debug("Unmute button was clicked");
                 debug("Refreshing page");
                 $this->driver->navigate()->refresh();
+                $this->driver->executeScript("(window.performance || window.mozPerformance || window.msPerformance || window.webkitPerformance).clearResourceTimings()");
                 $clickPlay();
             } catch (NoSuchElementException $e) {
                 debug("Unmute button not found, Skipped clicking the Unmute button");
             }
         };
-        $clickPlay();
-        $clickUnmute();
+//        $clickPlay();
+//        $clickUnmute();
         sleep(3);
         $script = <<<JS
         var performance = window.performance || window.mozPerformance || window.msPerformance || window.webkitPerformance || {}
@@ -93,43 +98,67 @@ class FacebookScrapper extends Scrapper
             return score(u2) - score(u1) 
         })
         urls = possibleUrls.map(e => e.split('&').filter(s => !s.contains('bytestart=') && !s.contains('byteend=')).join('&')).map(e => encodeURI(e))
-        urls = [...new Set(urls)].slice(0, 5)
-        if(urls.length === 0) return 0 
+        urls = [...new Set(urls)]
+        //urls = url.slice(0, 5)
         return urls
         JS;
-        debug("pulling video url");
-        $result = $this->driver->executeScript($script);
-        $result = array_map(fn($u) => str_replace([' ', "\n", "\r"], '', $u), $result);
-
-        dump("result is", $result);
-        if (is_numeric($result)) {
-            throw new ExpectationFailedException("The video was not played on the webpage, video url not found");
+        debug("pulling video sources");
+        file_put_contents("found_urls.txt", '');
+        $found_urls = collect($this->driver->executeScript($script))
+            ->map(fn($u) => str_replace([' ', "\n", "\r"], '', $u));
+        $found_urls->each(fn($u) => file_put_contents("found_urls.txt", $u . PHP_EOL, FILE_APPEND | LOCK_EX));
+        if (is_numeric($found_urls)) {
+            throw new DriverConnectionException("The video was not played on the webpage, video url not found");
         }
-        debug("Found {} possible urls", style(count($result), "blue"));
+        debug("Found {} possible urls", style(count($found_urls), "blue"));
         $ffprobe = \FFMpeg\FFProbe::create();
-        $result = array_map(function ($u) use ($ffprobe) {
-            $video = $ffprobe
-                ->streams($u)
-                ->videos()
-                ->first();
-            $audio = $ffprobe
-                ->streams($u)
-                ->audios()
-                ->first();
-            return $video ?? $audio;
-        }, $result);
-        dump($result);
-        return $result[0];
+        $found_streams = collect($found_urls)->map(function ($u) use ($ffprobe) {
+            $streams = $ffprobe->streams($u);
+            collect($streams->all())->each(fn($s) => $s->set('url', $u));
+            if ($streams->videos()->first() == null && $streams->audios()->first() == null) return null;
+            return $streams;
+        })->filter();
+        if ($found_streams->count() > 0)
+            info("The following media sources where found:");
+        else
+            error("No video sources were found");
+        $found_streams->each(function (StreamCollection $streams) {
+            $video = $streams->videos()->first();
+            $audio = $streams->audios()->first();
+            $d = $video ? $video->getDimensions() : null;
+            if ($video && $audio) {
+                echo format("{} {} {}",
+                        style("VIDEO", "magenta", "bold"),
+                        style(format("({}x{})", $d->getWidth(), $d->getHeight()), "blue"),
+                        $video->get('url'))
+                    . "\n";
+            } else if ($video) {
+                echo format("{} {} {}",
+                        style("VIDEO(NO AUDIO)", "magenta", "bold"),
+                        style(format("({}x{})", $d->getWidth(), $d->getHeight()), "blue"),
+                        $video->get('url'))
+                    . "\n";
+            } else {
+                echo format("{} {}",
+                        style("AUDIO", "magenta", "bold"),
+                        $audio->get('url'))
+                    . "\n";
+            }
+        });
+        return $found_urls;
     }
 
+    /**
+     * @throws Exception
+     */
     function getPostType($post_url, &$postNode): int
     {
+        info("Getting media type");
         try {
             /**
              * @var RemoteWebElement $postNode
              */
             $postNode = $this->driver->wait()->until(WebDriverExpectedCondition::visibilityOfElementLocated(WebDriverBy::cssSelector('[data-pagelet="MediaViewerPhoto"],[data-pagelet="WatchPermalinkVideo"]')));
-            dump($postNode);
             switch ($postNode->getAttribute("data-pagelet")) {
                 case "MediaViewerPhoto":
                     return TYPE_IMAGE;
@@ -142,5 +171,7 @@ class FacebookScrapper extends Scrapper
         debug("post container did not match any type");
         return -1;
     }
+
+
 }
 

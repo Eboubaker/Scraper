@@ -1,5 +1,6 @@
 # Scrapper
-PHP cli-based program to scrap media from websites that only work with javascript.
+CLI-based Web-Scrapper for Media elements made with PHP.  
+With this tool you can download videos & images from popular websites.
 
 ## Requirements
 - php >= 7.4

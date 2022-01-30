@@ -3,10 +3,8 @@
 namespace Eboubaker\Scrapper\Exception;
 
 
-class ExpectationFailedException extends \Exception
+class ExpectationFailedException extends UserException
 {
-    public function __construct($message = "", \Throwable $previous = null)
-    {
-        parent::__construct($message, 12, $previous);
-    }
+    protected $code = 15;
+
 }

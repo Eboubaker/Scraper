@@ -12,6 +12,7 @@ final class FacebookScrapperTest extends TestCase
             "", "--driver-url", "https://eboubaker.xyz:8800", "--out", $fname, "https://www.facebook.com/zuck/videos/4884691704896320"
         ]);
         $this->assertFileExists($fname);
+        $this->assertGreaterThan(bytes('1MB'), filesize($fname));
     }
 
     public function testCanScrapImageSource(): void

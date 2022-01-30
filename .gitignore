@@ -1,5 +1,5 @@
 /vendor/
 /downloads/
+/logs
 /.idea/
-*.png
-composer.lock
+/composer.lock

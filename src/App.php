@@ -4,8 +4,10 @@ namespace Eboubaker\Scrapper;
 
 use Eboubaker\Scrapper\Contracts\Scrapper;
 use Eboubaker\Scrapper\Exception\DriverConnectionException;
+use Eboubaker\Scrapper\Exception\InvalidArgumentException;
 use Eboubaker\Scrapper\Exception\UrlNavigationException;
 use Eboubaker\Scrapper\Exception\UrlNotSupportedException;
+use Eboubaker\Scrapper\Exception\UserException;
 use ErrorException;
 use Exception;
 use Facebook\WebDriver\Exception\InvalidSessionIdException;
@@ -22,17 +24,25 @@ final class App
     {
         try {
             self::bootstrap($args);
-            dump(self::$arguments);
             return self::run_main();
+        } catch (InvalidArgumentException $e) {
+            usage_error($e->getMessage());
+            return $e->getCode();
+        } catch (UserException $e) {
+            error($e->getMessage());
+            if (debug_enabled())
+                dump_exception($e);
+            return $e->getCode();
         } catch (Exception $e) {
+            // display nice error message to console, or maybe bad??
             dump_exception($e);
-            exit($e->getCode() !== 0 ? $e->getCode() : 100);
+            return $e->getCode() !== 0 ? $e->getCode() : 100;
         }
     }
 
     private static function bootstrap(array $args)
     {
-        // convert warning to exception.
+        // convert warnings to exceptions.
         set_error_handler(function (int    $errno,
                                     string $errstr,
                                     string $errfile,
@@ -40,7 +50,98 @@ final class App
             /** @noinspection PhpUnhandledExceptionInspection */
             throw new ErrorException($errstr, $errno, 1, $errfile, $errline);
         });
+        // parse arguments
         self::$arguments = self::parse_arguments($args);
+    }
+
+    /**
+     * @throws DriverConnectionException
+     * @throws UrlNavigationException
+     * @throws UrlNotSupportedException
+     * @throws InvalidArgumentException
+     */
+    private static function run_main(): int
+    {
+        // first argument or argument after -- (end of options)
+        $url = str_replace('\\', '', App::get(0, fn() => App::get("")));
+        if (empty($url)) {
+            throw new InvalidArgumentException("url was not provided");
+        }
+        $driver = self::connect_to_driver();
+
+        try {
+            info("Navigating to  {}", $url);
+            $driver->navigate()->to($url);
+        } catch (Exception $e) {
+            notice("If the webpage is not responding, make sure the webdriver has enough memory");
+            $driver->close();
+            throw new UrlNavigationException(format("Failed to navigate to the provided url: {}", $url ?? "NULL"));
+        }
+        try {
+            $currentUrl = $driver->getCurrentURL();
+            info("current url is {}", $currentUrl);
+        } catch (Exception $e) {
+            throw new DriverConnectionException("Could not get current URL", $e);
+        }
+        info("attempting to determine which extractor to use");
+        $scrapper = Scrapper::getRequiredScrapper($currentUrl, $driver);
+        info("using {}", (new \ReflectionClass($scrapper))->getShortName());
+        try {
+            info("Media file was downloaded as {}", realpath($scrapper->download_media_from_post_url($url)));
+        } catch (Exception $e) {
+            if (!$scrapper->close()) {// if driver was still open(not done using webdriver)
+                try {
+                    notice("an error occurred, attempting to take a screenshot of the webpage...");
+                    $picpath = consolepath("screenshot.png");
+                    $driver->takeScreenshot($picpath);
+                    if (filesize($picpath) > 4096) throw new Exception();
+                    notice("a screenshot of the webpage was saved as ./screenshot.png, check it out");
+                } catch (Exception $e) {
+                    error("could not save screenshot");
+                }
+            }
+            throw $e;
+        }
+        return 0;
+    }
+
+    /**
+     * @throws DriverConnectionException
+     */
+    private static function connect_to_driver(): RemoteWebDriver
+    {
+        $sessionId = App::get("driver-session");
+        $driverUrl = App::get("driver-url", "http://localhost:4444");
+
+        info("establishing connection with driver {}", $driverUrl ?? "NULL");
+        try {
+            $capabilities = DesiredCapabilities::chrome();
+            if (empty($sessionId)) {
+//            warn("Connecting without a sessionId, creating a new session will take some time");
+                $driver = RemoteWebDriver::create($driverUrl, $capabilities, 60000, 60000);
+                info("Connected to driver {} with a new session {}", $driverUrl, style($driver->getSessionID(), "green"));
+            } else {
+                $driver = RemoteWebDriver::createBySessionID($sessionId, $driverUrl, 60000, 60000);
+                info("Connected to driver {} with session {}", $driverUrl, style($driver->getSessionID(), "green"));
+            }
+            $driver->manage()->window()->setSize(new WebDriverDimension(1366, 768));
+            return $driver;
+        } catch (InvalidSessionIdException $e) {
+            throw new DriverConnectionException("Invalid sessionId {}", $sessionId);
+        } catch (Exception $e) {
+            notice("Make sure the driver is running and the queue is not full or specify a different driver");
+            throw new DriverConnectionException(format("Failed to connect to the driver {}", $driverUrl), $e);
+        }
+    }
+
+    /**
+     * get the option value in the arguments
+     * @param string $option the option name
+     * @return mixed
+     */
+    public static function get(string $option, $default = null)
+    {
+        return Arr::get(self::$arguments, $option, $default);
     }
 
     /**
@@ -87,95 +188,6 @@ final class App
             }
         }
         return $o;
-    }
-
-    /**
-     * @throws DriverConnectionException
-     * @throws UrlNavigationException
-     * @throws UrlNotSupportedException
-     */
-    private static function run_main(): int
-    {
-        $driver = self::connect_to_driver();
-        // first argument or argument after -- (end of options)
-        $url = self::get("0", fn() => self::get(""));
-        try {
-            info("Navigating to {}", $url);
-            $driver->navigate()->to($url);
-        } catch (Exception $e) {
-            notice("If the webpage is not responding, make sure the webdriver has enough memory");
-            $driver->close();
-            throw new UrlNavigationException(format("Failed to navigate to the provided url: {}", $url ?? "NULL"));
-        }
-        info("attempting to determine which extractor to use");
-        try {
-            $currentUrl = $driver->getCurrentURL();
-            info("current url is {}", $currentUrl);
-        } catch (Exception $e) {
-            throw new DriverConnectionException("Could not get current URL", 0, $e);
-        }
-        $scrapper = Scrapper::getRequiredScrapper($currentUrl, $driver);
-        info("using {}", (new \ReflectionClass($scrapper))->getShortName());
-        try {
-            $scrapper->download_media_from_post_url($url);
-        } catch (Exception $e) {
-            dump_exception($e);
-            $scrapper->close();
-            try {
-                info("an error occurred, attempting to take a screenshot of the webpage...");
-                $driver->takeScreenshot(getcwd() . DIRECTORY_SEPARATOR . "screenshot.png");
-                if (filesize("screenshot.png") > 4096) throw new Exception();
-                notice("a screenshot of the webpage was saved as ./screenshot.png, do you want to open it now?");
-                printf("Open screenshot?(Y/N):");
-                $line = rtrim(fgets(STDIN));
-                if ($line === 'y' || $line === 'Y') {
-                    // TODO: avoid system()
-                    if (host_is_windows_machine()) system("explorer.exe \"" . getcwd() . DIRECTORY_SEPARATOR . "screenshot.png\"");
-                    else system("open \"" . getcwd() . DIRECTORY_SEPARATOR . "screenshot.png\"");
-                }
-            } catch (Exception $e) {
-                error("could not save screenshot");
-            }
-        }
-    }
-
-    /**
-     * @throws DriverConnectionException
-     */
-    private static function connect_to_driver(): RemoteWebDriver
-    {
-        $sessionId = self::get("driver-session");
-        $driverUrl = self::get("driver-url", "http://localhost:4444");
-
-        info("establishing connection with driver {}", $driverUrl ?? "NULL");
-        try {
-            $capabilities = DesiredCapabilities::chrome();
-            if (empty($sessionId)) {
-//            warn("Connecting without a sessionId, creating a new session will take some time");
-                $driver = RemoteWebDriver::create($driverUrl, $capabilities, 60000, 60000);
-                info("Connected to driver {} with a new session {}", $driverUrl, style($driver->getSessionID(), "green"));
-            } else {
-                $driver = RemoteWebDriver::createBySessionID($sessionId, $driverUrl, 60000, 60000);
-                info("Connected to driver {} with session {}", $driverUrl, style($driver->getSessionID(), "green"));
-            }
-            $driver->manage()->window()->setSize(new WebDriverDimension(1366, 768));
-            return $driver;
-        } catch (InvalidSessionIdException $e) {
-            throw new DriverConnectionException("Invalid sessionId {}", $sessionId);
-        } catch (Exception $e) {
-            notice("Make sure the driver is running and the queue is not full or specify a different driver");
-            throw new DriverConnectionException("Failed to connect to the driver", 0, $e);
-        }
-    }
-
-    /**
-     * get the option value in the arguments
-     * @param string $option the option name
-     * @return mixed
-     */
-    public static function get(string $option, $default = null)
-    {
-        return Arr::get(self::$arguments, $option, $default);
     }
 
 }

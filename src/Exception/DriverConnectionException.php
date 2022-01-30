@@ -2,10 +2,8 @@
 
 namespace Eboubaker\Scrapper\Exception;
 
-class DriverConnectionException extends \Exception
+class DriverConnectionException extends UserException
 {
-    public function __construct($message = "", \Throwable $previous = null)
-    {
-        parent::__construct($message, 11, $previous);
-    }
+    protected $code = 16;
+
 }

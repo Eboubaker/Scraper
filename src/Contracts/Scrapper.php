@@ -58,26 +58,28 @@ abstract class Scrapper
     }
 
     /**
-     * download the media in post
+     * download the media in post should return the filename
      */
-    abstract function download_media_from_post_url($post_url);
+    abstract function download_media_from_post_url($post_url): string;
 
     /**
      * close any resources used by the scrapper such as the Webdriver connection
      */
-    public function close()
+    public function close(): bool
     {
         if (!$this->wasClosed) {
-            info("sending close signal");
+            debug("sending close signal to webdriver");
             try {
                 $this->driver->close();
                 $this->wasClosed = true;
+                return true;
             } catch (Exception $e) {
-                error("Failed to close window");
+                error("Failed to close webdriver");
             }
         } else {
             debug("driver was already closed");
         }
+        return false;
     }
 
     /**

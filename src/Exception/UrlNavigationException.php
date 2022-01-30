@@ -3,10 +3,8 @@
 namespace Eboubaker\Scrapper\Exception;
 
 
-class UrlNavigationException extends \Exception
+class UrlNavigationException extends UserException
 {
-    public function __construct($message = "", \Throwable $previous = null)
-    {
-        parent::__construct($message, 14, $previous);
-    }
+    protected $code = 12;
+
 }

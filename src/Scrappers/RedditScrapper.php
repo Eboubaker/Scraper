@@ -37,7 +37,7 @@ class RedditScrapper extends Scrapper
     /**
      * @throws Exception
      */
-    function download_media_from_post_url($post_url)
+    function download_media_from_post_url($post_url): string
     {
         try {
             echo "Loading url $post_url\n";
@@ -51,6 +51,7 @@ class RedditScrapper extends Scrapper
             echo "Attempting to download image $src\n";
             $filename = $this->saveUrl($src);
             echo "Downloaded image $src as $filename\n";
+            return $filename;
         } catch (Exception $e) {
             echo "Failed to locate media element in url $post_url\n";
             echo "Attempting to make a screenshot of the browser\n";

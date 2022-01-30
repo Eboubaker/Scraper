@@ -2,10 +2,8 @@
 
 namespace Eboubaker\Scrapper\Exception;
 
-class InvalidArgumentException extends \Exception
+class InvalidArgumentException extends UserException
 {
-    public function __construct($message = "", \Throwable $previous = null)
-    {
-        parent::__construct($message, 13, $previous);
-    }
+    protected $code = 14;
+
 }

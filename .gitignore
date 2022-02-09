@@ -3,3 +3,14 @@
 /logs
 /.idea/
 /composer.lock
+/.phpunit.result.cache
+
+/**/*.mp4
+/**/*.png
+/**/*.jpg
+
+/DEV_NOTES
+/*.json
+/*.html
+/src/*.json
+/src/*.html

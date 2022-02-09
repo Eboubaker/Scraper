@@ -9,7 +9,7 @@ final class FacebookScrapperTest extends TestCase
     {
         $fname = getcwd() . DIRECTORY_SEPARATOR . "test_" . time() . "mp4";
         App::run([
-            "", "--driver-url", "https://eboubaker.xyz:8800", "--out", $fname, "https://www.facebook.com/zuck/videos/4884691704896320"
+            "", "--out", $fname, "https://www.facebook.com/zuck/videos/4884691704896320"
         ]);
         $this->assertFileExists($fname);
         $this->assertGreaterThan(bytes('1MB'), filesize($fname));

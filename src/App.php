@@ -1,24 +1,18 @@
-<?php
+<?php declare(strict_types=1);
 
 namespace Eboubaker\Scrapper;
 
 use Eboubaker\Scrapper\Contracts\Scrapper;
-use Eboubaker\Scrapper\Exception\DriverConnectionException;
 use Eboubaker\Scrapper\Exception\InvalidArgumentException;
-use Eboubaker\Scrapper\Exception\UrlNavigationException;
 use Eboubaker\Scrapper\Exception\UrlNotSupportedException;
 use Eboubaker\Scrapper\Exception\UserException;
 use ErrorException;
 use Exception;
-use Facebook\WebDriver\Exception\InvalidSessionIdException;
-use Facebook\WebDriver\Remote\DesiredCapabilities;
-use Facebook\WebDriver\Remote\RemoteWebDriver;
-use Facebook\WebDriver\WebDriverDimension;
 use Tightenco\Collect\Support\Arr;
 
 final class App
 {
-    private static array $arguments;
+    private static array $arguments = [];
 
     public static function run(array $args): int
     {
@@ -52,94 +46,40 @@ final class App
         });
         // parse arguments
         self::$arguments = self::parse_arguments($args);
+
+        // disable pcre jit because we are dealing with big chunks of text
+        ini_set("pcre.jit", '0');
     }
 
     /**
-     * @throws DriverConnectionException
-     * @throws UrlNavigationException
      * @throws UrlNotSupportedException
      * @throws InvalidArgumentException
+     * @throws Exception
      */
     private static function run_main(): int
     {
         // first argument or argument after -- (end of options)
-        $url = str_replace('\\', '', App::get(0, fn() => App::get("")));
+        // replace commandline escape character '\'
+        $url = str_replace('\\', '', App::get(0, fn() => App::get('', '')));
         if (empty($url)) {
             throw new InvalidArgumentException("url was not provided");
         }
-        $driver = self::connect_to_driver();
+        list($html_document, $final_url) = Scrapper::load_webpage($url);
 
-        try {
-            info("Navigating to  {}", $url);
-            $driver->navigate()->to($url);
-        } catch (Exception $e) {
-            notice("If the webpage is not responding, make sure the webdriver has enough memory");
-            $driver->close();
-            throw new UrlNavigationException(format("Failed to navigate to the provided url: {}", $url ?? "NULL"));
-        }
-        try {
-            $currentUrl = $driver->getCurrentURL();
-            info("current url is {}", $currentUrl);
-        } catch (Exception $e) {
-            throw new DriverConnectionException("Could not get current URL", $e);
-        }
         info("attempting to determine which extractor to use");
-        $scrapper = Scrapper::getRequiredScrapper($currentUrl, $driver);
+        $scrapper = Scrapper::getRequiredScrapper($final_url);
         info("using {}", (new \ReflectionClass($scrapper))->getShortName());
-        try {
-            info("Media file was downloaded as {}", realpath($scrapper->download_media_from_post_url($url)));
-        } catch (Exception $e) {
-            if (!$scrapper->close()) {// if driver was still open(not done using webdriver)
-                try {
-                    notice("an error occurred, attempting to take a screenshot of the webpage...");
-                    $picpath = consolepath("screenshot.png");
-                    $driver->takeScreenshot($picpath);
-                    if (filesize($picpath) > 4096) throw new Exception();
-                    notice("a screenshot of the webpage was saved as ./screenshot.png, check it out");
-                } catch (Exception $e) {
-                    error("could not save screenshot");
-                }
-            }
-            throw $e;
-        }
+
+        $scrapper->download_media_from_html_document($html_document);
         return 0;
     }
 
     /**
-     * @throws DriverConnectionException
-     */
-    private static function connect_to_driver(): RemoteWebDriver
-    {
-        $sessionId = App::get("driver-session");
-        $driverUrl = App::get("driver-url", "http://localhost:4444");
-
-        info("establishing connection with driver {}", $driverUrl ?? "NULL");
-        try {
-            $capabilities = DesiredCapabilities::chrome();
-            if (empty($sessionId)) {
-//            warn("Connecting without a sessionId, creating a new session will take some time");
-                $driver = RemoteWebDriver::create($driverUrl, $capabilities, 60000, 60000);
-                info("Connected to driver {} with a new session {}", $driverUrl, style($driver->getSessionID(), "green"));
-            } else {
-                $driver = RemoteWebDriver::createBySessionID($sessionId, $driverUrl, 60000, 60000);
-                info("Connected to driver {} with session {}", $driverUrl, style($driver->getSessionID(), "green"));
-            }
-            $driver->manage()->window()->setSize(new WebDriverDimension(1366, 768));
-            return $driver;
-        } catch (InvalidSessionIdException $e) {
-            throw new DriverConnectionException("Invalid sessionId {}", $sessionId);
-        } catch (Exception $e) {
-            notice("Make sure the driver is running and the queue is not full or specify a different driver");
-            throw new DriverConnectionException(format("Failed to connect to the driver {}", $driverUrl), $e);
-        }
-    }
-
-    /**
      * get the option value in the arguments
-     * @param string $option the option name
+     * @param string|int $option the option name/key
      * @return mixed
      */
-    public static function get(string $option, $default = null)
+    public static function get($option, $default = null)
     {
         return Arr::get(self::$arguments, $option, $default);
     }
@@ -151,7 +91,7 @@ final class App
      */
     public static function parse_arguments($argv = null): array
     {
-        $argv = $argv ? $argv : $_SERVER['argv'];
+        $argv = $argv ?: $_SERVER['argv'];
         array_shift($argv);
         $o = array();
         for ($i = 0, $j = count($argv); $i < $j; $i++) {

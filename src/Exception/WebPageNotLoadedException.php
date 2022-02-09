@@ -2,7 +2,8 @@
 
 namespace Eboubaker\Scrapper\Exception;
 
-class DriverConnectionException extends UserException
+
+class WebPageNotLoadedException extends UserException
 {
     protected $code = 16;
 

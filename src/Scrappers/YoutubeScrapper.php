@@ -5,11 +5,11 @@ namespace Eboubaker\Scrapper\Scrappers;
 use Eboubaker\Scrapper\Contracts\Scrapper;
 use Eboubaker\Scrapper\Exception\NotImplementedException;
 
-class RedditScrapper extends Scrapper
+class YoutubeScrapper extends Scrapper
 {
     public static function can_scrap($url): bool
     {
-        return !!preg_match("/https?:\/\/(www\.)?reddit\.com\//", $url);
+        return !!preg_match("/https?:\/\/((m|www)\.)?youtu(be)?(-nocookie)?\.(com|be)\//", $url);
     }
 
     /**
@@ -17,7 +17,7 @@ class RedditScrapper extends Scrapper
      */
     function download_media_from_html_document(string $html_document): string
     {
-        throw new NotImplementedException("Reddit scrapper will be implemented soon.");
+        throw new NotImplementedException("Youtube scrapper will be implemented very soon.");
     }
 }
 

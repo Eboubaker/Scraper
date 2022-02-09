@@ -184,8 +184,17 @@ function usage_error($msg)
     echo <<<EOF
     Error: $msg
     Usage:    php scrap.php [--debug] [--out <output_file>] <PAGE_URL>
-    Examples: php scrap.php --out zuck.mp4 https://www.facebook.com/zuck/videos/4884691704896320
-              php scrap.php https://www.youtube.com/watch?v=dQw4w9WgXcQ
+    Options
+        --out <path>  set output path, default is current working directory(cmd path).
+        --no-download just spit out the media url nothing will be downloaded.
+        --debug       display more useful information.
+
+    Examples
+        php scrap.php "https://www.facebook.com/zuck/videos/4884691704896320" --out zuck.mp4
+        php scrap.php "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        
+    Notes
+        The url should always be the first argument
     EOF;
     echo "\n\n";
 }

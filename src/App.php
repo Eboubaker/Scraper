@@ -58,11 +58,10 @@ final class App
      */
     private static function run_main(): int
     {
-        // first argument or argument after -- (end of options)
-        // replace commandline escape character '\'
-        $url = str_replace('\\', '', App::get(0, fn() => App::get('', '')));
+        // first argument
+        $url = str_replace('\\', '', App::get(0, ''));
         if (empty($url)) {
-            throw new InvalidArgumentException("url was not provided");
+            throw new InvalidArgumentException("url was not provided, url must be the first argument");
         }
         list($html_document, $final_url) = Scrapper::load_webpage($url);
 

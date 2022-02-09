@@ -2,7 +2,6 @@
 /downloads/
 /logs
 /.idea/
-/composer.lock
 /.phpunit.result.cache
 
 /**/*.mp4

@@ -2,14 +2,5 @@
 /downloads/
 /logs
 /.idea
-/.phpunit.result.cache
-
-/**/*.mp4
-/**/*.png
-/**/*.jpg
-
+/**/*.cache
 /DEV_NOTES
-/*.json
-/*.html
-/src/*.json
-/src/*.html

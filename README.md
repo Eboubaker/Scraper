@@ -1,6 +1,5 @@
 # Scrapper
-
-CLI-based Web-Scrapper for Media elements.  
+Media Web-Scrapper.  
 With this tool you can download videos & images from popular websites.
 
 # Quickstart
@@ -37,6 +36,7 @@ docker run -it --rm eboubaker/scrapper <args>
 git clone https://github.com/Eboubaker/Scrapper
 cd scrapper
 composer install
+php src/scrapper.php <args>
 ```
 
 # RoadMap

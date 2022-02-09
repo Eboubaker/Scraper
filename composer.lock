@@ -4,7 +4,7 @@
     "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
     "This file is @generated automatically"
   ],
-  "content-hash": "5b3f43eecae510a8cacac977c7977ed5",
+  "content-hash": "4675cb827484ec3ca931352cdc2a5355",
   "packages": [
     {
       "name": "alchemy/binary-driver",
@@ -576,20 +576,21 @@
     },
     {
       "name": "symfony/css-selector",
-      "version": "v6.0.3",
+      "version": "v5.4.3",
       "source": {
         "type": "git",
         "url": "https://github.com/symfony/css-selector.git",
-        "reference": "1955d595c12c111629cc814d3f2a2ff13580508a"
+        "reference": "b0a190285cd95cb019237851205b8140ef6e368e"
       },
       "dist": {
         "type": "zip",
-        "url": "https://api.github.com/repos/symfony/css-selector/zipball/1955d595c12c111629cc814d3f2a2ff13580508a",
-        "reference": "1955d595c12c111629cc814d3f2a2ff13580508a",
+        "url": "https://api.github.com/repos/symfony/css-selector/zipball/b0a190285cd95cb019237851205b8140ef6e368e",
+        "reference": "b0a190285cd95cb019237851205b8140ef6e368e",
         "shasum": ""
       },
       "require": {
-        "php": ">=8.0.2"
+        "php": ">=7.2.5",
+        "symfony/polyfill-php80": "^1.16"
       },
       "type": "library",
       "autoload": {
@@ -621,7 +622,7 @@
       "description": "Converts CSS selectors to XPath expressions",
       "homepage": "https://symfony.com",
       "support": {
-        "source": "https://github.com/symfony/css-selector/tree/v6.0.3"
+        "source": "https://github.com/symfony/css-selector/tree/v5.4.3"
       },
       "funding": [
         {
@@ -637,33 +638,102 @@
           "type": "tidelift"
         }
       ],
-      "time": "2022-01-02T09:55:41+00:00"
+      "time": "2022-01-02T09:53:40+00:00"
     },
     {
-      "name": "symfony/dom-crawler",
-      "version": "v6.0.3",
+      "name": "symfony/deprecation-contracts",
+      "version": "v3.0.0",
       "source": {
         "type": "git",
-        "url": "https://github.com/symfony/dom-crawler.git",
-        "reference": "24d9de5965b8b043ea13ef234087543c9740641c"
+        "url": "https://github.com/symfony/deprecation-contracts.git",
+        "reference": "c726b64c1ccfe2896cb7df2e1331c357ad1c8ced"
       },
       "dist": {
         "type": "zip",
-        "url": "https://api.github.com/repos/symfony/dom-crawler/zipball/24d9de5965b8b043ea13ef234087543c9740641c",
-        "reference": "24d9de5965b8b043ea13ef234087543c9740641c",
+        "url": "https://api.github.com/repos/symfony/deprecation-contracts/zipball/c726b64c1ccfe2896cb7df2e1331c357ad1c8ced",
+        "reference": "c726b64c1ccfe2896cb7df2e1331c357ad1c8ced",
         "shasum": ""
       },
       "require": {
-        "php": ">=8.0.2",
+        "php": ">=8.0.2"
+      },
+      "type": "library",
+      "extra": {
+        "branch-alias": {
+          "dev-main": "3.0-dev"
+        },
+        "thanks": {
+          "name": "symfony/contracts",
+          "url": "https://github.com/symfony/contracts"
+        }
+      },
+      "autoload": {
+        "files": [
+          "function.php"
+        ]
+      },
+      "notification-url": "https://packagist.org/downloads/",
+      "license": [
+        "MIT"
+      ],
+      "authors": [
+        {
+          "name": "Nicolas Grekas",
+          "email": "p@tchwork.com"
+        },
+        {
+          "name": "Symfony Community",
+          "homepage": "https://symfony.com/contributors"
+        }
+      ],
+      "description": "A generic function and convention to trigger deprecation notices",
+      "homepage": "https://symfony.com",
+      "support": {
+        "source": "https://github.com/symfony/deprecation-contracts/tree/v3.0.0"
+      },
+      "funding": [
+        {
+          "url": "https://symfony.com/sponsor",
+          "type": "custom"
+        },
+        {
+          "url": "https://github.com/fabpot",
+          "type": "github"
+        },
+        {
+          "url": "https://tidelift.com/funding/github/packagist/symfony/symfony",
+          "type": "tidelift"
+        }
+      ],
+      "time": "2021-11-01T23:48:49+00:00"
+    },
+    {
+      "name": "symfony/dom-crawler",
+      "version": "v5.4.3",
+      "source": {
+        "type": "git",
+        "url": "https://github.com/symfony/dom-crawler.git",
+        "reference": "2634381fdf27a2a0a8ac8eb404025eb656c65d0c"
+      },
+      "dist": {
+        "type": "zip",
+        "url": "https://api.github.com/repos/symfony/dom-crawler/zipball/2634381fdf27a2a0a8ac8eb404025eb656c65d0c",
+        "reference": "2634381fdf27a2a0a8ac8eb404025eb656c65d0c",
+        "shasum": ""
+      },
+      "require": {
+        "php": ">=7.2.5",
+        "symfony/deprecation-contracts": "^2.1|^3",
         "symfony/polyfill-ctype": "~1.8",
-        "symfony/polyfill-mbstring": "~1.0"
+        "symfony/polyfill-mbstring": "~1.0",
+        "symfony/polyfill-php80": "^1.16"
       },
       "conflict": {
         "masterminds/html5": "<2.6"
       },
       "require-dev": {
         "masterminds/html5": "^2.6",
-        "symfony/css-selector": "^5.4|^6.0"
+        "symfony/css-selector": "^4.4|^5.0|^6.0"
       },
       "suggest": {
         "symfony/css-selector": ""
@@ -694,7 +764,7 @@
       "description": "Eases DOM navigation for HTML and XML documents",
       "homepage": "https://symfony.com",
       "support": {
-        "source": "https://github.com/symfony/dom-crawler/tree/v6.0.3"
+        "source": "https://github.com/symfony/dom-crawler/tree/v5.4.3"
       },
       "funding": [
         {
@@ -710,7 +780,7 @@
           "type": "tidelift"
         }
       ],
-      "time": "2022-01-02T09:55:41+00:00"
+      "time": "2022-01-02T09:53:40+00:00"
     },
     {
       "name": "symfony/filesystem",
@@ -888,16 +958,16 @@
         "thanks": {
           "name": "symfony/polyfill",
           "url": "https://github.com/symfony/polyfill"
-                }
-            },
-            "autoload": {
-                "psr-4": {
-                    "Symfony\\Polyfill\\Mbstring\\": ""
-                },
-                "files": [
-                    "bootstrap.php"
-                ]
-            },
+        }
+      },
+      "autoload": {
+        "psr-4": {
+          "Symfony\\Polyfill\\Mbstring\\": ""
+        },
+        "files": [
+          "bootstrap.php"
+        ]
+      },
             "notification-url": "https://packagist.org/downloads/",
             "license": [
                 "MIT"
@@ -1057,17 +1127,17 @@
       "authors": [
         {
           "name": "Fabien Potencier",
-                    "email": "fabien@symfony.com"
-                },
-                {
-                    "name": "Symfony Community",
-                    "homepage": "https://symfony.com/contributors"
-                }
-            ],
-            "description": "Executes commands in sub-processes",
-            "homepage": "https://symfony.com",
-            "support": {
-              "source": "https://github.com/symfony/process/tree/v5.4.3"
+          "email": "fabien@symfony.com"
+        },
+        {
+          "name": "Symfony Community",
+          "homepage": "https://symfony.com/contributors"
+        }
+      ],
+      "description": "Executes commands in sub-processes",
+      "homepage": "https://symfony.com",
+      "support": {
+        "source": "https://github.com/symfony/process/tree/v5.4.3"
             },
             "funding": [
               {
@@ -1196,16 +1266,16 @@
         "symfony/process": "^4.4|^5.0|^6.0",
         "symfony/uid": "^5.1|^6.0",
         "twig/twig": "^2.13|^3.0.4"
-            },
-            "suggest": {
-                "ext-iconv": "To convert non-UTF-8 strings to UTF-8 (or symfony/polyfill-iconv in case ext-iconv cannot be used).",
-                "ext-intl": "To show region name in time zone dump",
-                "symfony/console": "To use the ServerDumpCommand and/or the bin/var-dump-server script"
-            },
-            "bin": [
-                "Resources/bin/var-dump-server"
-            ],
-            "type": "library",
+      },
+      "suggest": {
+        "ext-iconv": "To convert non-UTF-8 strings to UTF-8 (or symfony/polyfill-iconv in case ext-iconv cannot be used).",
+        "ext-intl": "To show region name in time zone dump",
+        "symfony/console": "To use the ServerDumpCommand and/or the bin/var-dump-server script"
+      },
+      "bin": [
+        "Resources/bin/var-dump-server"
+      ],
+      "type": "library",
             "autoload": {
                 "files": [
                     "Resources/functions/dump.php"
@@ -3461,8 +3531,9 @@
   "prefer-lowest": false,
   "platform": {
     "php": "^7.4|^8.0|^8.1",
-    "ext-curl": "*",
     "ext-json": "*",
+    "ext-curl": "*",
+    "ext-dom": "*",
     "ext-mbstring": "*"
   },
   "platform-dev": [],

@@ -38,6 +38,7 @@ cd scrapper
 composer install
 php src/scrapper.php <args>
 ```
+> You *might* need to remove composer.lock before doing `composer install`
 
 # RoadMap
 

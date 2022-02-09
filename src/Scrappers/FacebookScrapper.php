@@ -27,13 +27,15 @@ class FacebookScrapper extends Scrapper
         $videos = data_get($data_bag, array_search_match($data_bag, [
                 "data.video.story.attachments",
             ]) . ".data.video.story.attachments");
-        foreach ($videos as $video) {
-            notice("VIDEO URL: {}", data_get($video, 'media.playable_url_quality_hd',
-                fn() => data_get($video, 'media.playable_url')));
+        if ($videos) {
+            foreach ($videos as $video) {
+                notice("VIDEO URL: {}", data_get($video, 'media.playable_url_quality_hd',
+                    fn() => data_get($video, 'media.playable_url')));
+            }
         }
         if (isset($image['uri'])) {
             notice("IMAGE URL: {}", $image['uri']);
-        } else if (count($videos) == 0) {
+        } else if (!$videos || count($videos) == 0) {
             error("No media elements were found in this post");
         }
         return '';

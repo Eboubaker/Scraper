@@ -28,6 +28,11 @@ function info(string $msg, ...$args)
     echo style("[INFO] ", "cyan,bold") . format($msg, ...$args) . "\n";
 }
 
+function tell(string $msg, ...$args)
+{
+    echo format($msg, ...$args) . "\n";
+}
+
 function notice(string $msg, ...$args)
 {
     echo style("[NOTICE] ", "red,yellow,bold") . format($msg, ...$args) . "\n";
@@ -148,7 +153,7 @@ function putif($condition, $value)
  */
 function debug_enabled(): bool
 {
-    return boolval(\Eboubaker\Scrapper\App::get('debug'));
+    return boolval(\Eboubaker\Scrapper\App::args()->getOpt('verbose'));
 }
 
 /**
@@ -174,29 +179,6 @@ function rootpath(string $append = ''): string
 function consolepath(string $append = ''): string
 {
     return getcwd() . putif($append !== '', DIRECTORY_SEPARATOR . $append);
-}
-
-/**
- * @author Eboubakkar Bekkouche <eboubakkar@gmail.com>
- */
-function usage_error($msg)
-{
-    echo <<<EOF
-    Error: $msg
-    Usage:    php scrap.php [--debug] [--out <output_file>] <PAGE_URL>
-    Options
-        --out <path>  set output path, default is current working directory(cmd path).
-        --no-download just spit out the media url nothing will be downloaded.
-        --debug       display more useful information.
-
-    Examples
-        php scrap.php "https://www.facebook.com/zuck/videos/4884691704896320" --out zuck.mp4
-        php scrap.php "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
-        
-    Notes
-        The url should always be the first argument
-    EOF;
-    echo "\n\n";
 }
 
 /**

@@ -8,11 +8,12 @@ use Eboubaker\Scrapper\Exception\UrlNotSupportedException;
 use Eboubaker\Scrapper\Exception\UserException;
 use ErrorException;
 use Exception;
-use Tightenco\Collect\Support\Arr;
+use Garden\Cli\Args;
+use Garden\Cli\Cli;
 
 final class App
 {
-    private static array $arguments = [];
+    private static Args $arguments;
 
     public static function run(array $args): int
     {
@@ -20,7 +21,10 @@ final class App
             self::bootstrap($args);
             return self::run_main();
         } catch (InvalidArgumentException $e) {
-            usage_error($e->getMessage());
+            error($e->getMessage());
+            if ($e->getPrevious())
+                error($e->getPrevious()->getMessage());
+            tell("run with --help to see usage");
             return $e->getCode();
         } catch (UserException $e) {
             error($e->getMessage());
@@ -34,6 +38,10 @@ final class App
         }
     }
 
+    /**
+     * @throws InvalidArgumentException
+     * @throws ErrorException
+     */
     private static function bootstrap(array $args)
     {
         // convert warnings to exceptions.
@@ -45,8 +53,11 @@ final class App
             throw new ErrorException($errstr, $errno, 1, $errfile, $errline);
         });
         // parse arguments
-        self::$arguments = self::parse_arguments($args);
-
+        App::$arguments = self::parse_arguments($args);
+        if (App::args()->getOpt('version')) {
+            tell("v{}", json_decode(@file_get_contents(rootpath('composer.json')) ?? "{\"version\":\"undefined\"}", true)["version"]);
+            exit(0);
+        }
         // disable pcre jit because we are dealing with big chunks of text
         ini_set("pcre.jit", '0');
     }
@@ -58,11 +69,13 @@ final class App
      */
     private static function run_main(): int
     {
-        // first argument
-        $url = str_replace('\\', '', App::get(0, ''));
+        // escape terminal escape char '\'
+        $url = str_replace('\\', '', App::args()->getArg('url', ''));
+
         if (empty($url)) {
-            throw new InvalidArgumentException("url was not provided, url must be the first argument");
+            throw new InvalidArgumentException("url was not provided");
         }
+
         list($html_document, $final_url) = Scrapper::load_webpage($url);
 
         info("attempting to determine which extractor to use");
@@ -73,60 +86,33 @@ final class App
         return 0;
     }
 
-    /**
-     * get the option value in the arguments
-     * @param string|int $option the option name/key
-     * @return mixed
-     */
-    public static function get($option, $default = null)
+
+    public static function args(): Args
     {
-        return Arr::get(self::$arguments, $option, $default);
+        return self::$arguments;
     }
 
     /**
      * parseArgs Command Line Interface (CLI) utility function.
+     * @throws InvalidArgumentException
      * @author              Patrick Fisher <patrick@pwfisher.com>
      * @see                 https://github.com/pwfisher/CommandLine.php
      */
-    public static function parse_arguments($argv = null): array
+    public static function parse_arguments($argv = null): Args
     {
-        $argv = $argv ?: $_SERVER['argv'];
-        array_shift($argv);
-        $o = array();
-        for ($i = 0, $j = count($argv); $i < $j; $i++) {
-            $a = $argv[$i];
-            if (substr($a, 0, 2) == '--') {
-                $eq = strpos($a, '=');
-                if ($eq !== false) {
-                    $o[substr($a, 2, $eq - 2)] = substr($a, $eq + 1);
-                } else {
-                    $k = substr($a, 2);
-                    if ($i + 1 < $j && $argv[$i + 1][0] !== '-') {
-                        $o[$k] = $argv[$i + 1];
-                        $i++;
-                    } else if (!isset($o[$k])) {
-                        $o[$k] = true;
-                    }
-                }
-            } else if (substr($a, 0, 1) == '-') {
-                if (substr($a, 2, 1) == '=') {
-                    $o[substr($a, 1, 1)] = substr($a, 3);
-                } else {
-                    foreach (str_split(substr($a, 1)) as $k) {
-                        if (!isset($o[$k])) {
-                            $o[$k] = true;
-                        }
-                    }
-                    if ($i + 1 < $j && $argv[$i + 1][0] !== '-') {
-                        $o[$k] = $argv[$i + 1];
-                        $i++;
-                    }
-                }
-            } else {
-                $o[] = $a;
-            }
+        $cli = Cli::create()
+            ->description("Download media from a post url")
+            ->opt("out:o", "set output path, default is current working directory(cmd path)")
+            ->opt("verbose:v", "display more useful information", false, 'bool')
+            ->opt("version", "show version", false, 'bool')
+            ->arg("url", "Post Url");
+        try {
+            if (count($argv) === 1)
+                array_push($argv, "--help");
+            return $cli->parse($argv, in_array("--help", $argv));
+        } catch (\Throwable $e) {
+            throw new InvalidArgumentException("Invalid options", $e);
         }
-        return $o;
     }
 
 }

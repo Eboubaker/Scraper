@@ -11,28 +11,28 @@ error_reporting(E_ALL);
 function main(array $argv): int
 {
     if (count($argv) === 1) {
-        fwrite(STDERR, "Provide a Tag");
+        fwrite(STDERR, "Provide a release name" . PHP_EOL);
         return 1;
     }
-
-    $tag = $argv[1];
-    if ($tag[0] !== 'v')
-        $tag = 'v' . $tag;
-    echo "Making tag: $tag\r\n";
+    // release name
+    $rname = $argv[1];
+    if ($rname[0] !== 'v')
+        $rname = 'v' . $rname;
+    echo "Making release: $rname" . PHP_EOL;
 
     try {
-        $win_target = make_release("winx86", $tag);
-        $linux_target = make_release("linux", $tag);
+        $win_target = make_release("winx86", $rname);
+        $linux_target = make_release("linux", $rname);
         // use github cli to create release, generate notes and upload the zip release.
-        echo "Pushing: $tag\r\n";
-        system("gh release create $tag --generate-notes " . quote($win_target) . " " . quote($linux_target), $code);
+        echo "Pushing: $rname\r\n";
+        system("gh release create $rname --generate-notes " . quote($win_target) . " " . quote($linux_target), $code);
         if ($code !== 0) {
             throw new Exception("Failed to create release with githubCLI");
         }
 //        @unlink($win_target);
 //        @unlink($linux_target);
     } catch (Exception $e) {
-        fwrite(STDERR, "Error: " . $e->getMessage());
+        fwrite(STDERR, "Error: " . $e->getMessage() . PHP_EOL);
         return 1;
     }
 
@@ -43,14 +43,14 @@ function main(array $argv): int
  * @return string path to zip file.
  * @throws Exception
  */
-function make_release(string $name, string $tag): string
+function make_release(string $name, string $rname): string
 {
-    $release_container = normalize(dirname(__FILE__), "/releases/scrapper-$name-$tag");
+    $release_container = normalize(dirname(__FILE__), "/releases/scrapper-$name-$rname");
     $release_app_src = normalize("$release_container/scrapper");
-    $release_zip_output = normalize(dirname(__FILE__), "/releases/scrapper-$name-$tag.zip");
+    $release_zip_output = normalize(dirname(__FILE__), "/releases/scrapper-$name-$rname.zip");
 
     if (file_exists($release_container))
-        throw new Exception("Release $tag already exists: $release_container");
+        throw new Exception("Release $rname already exists: $release_container");
 
     if (file_exists($release_zip_output))
         throw new Exception("Release zip already exists: $release_zip_output");
@@ -141,12 +141,10 @@ function copyfs($source, $dest): bool
  */
 function rmfs($entry): bool
 {
-    if (is_file($entry)) {
-        unlink($entry);
-        return true;
-    } else {
-        if (substr($entry, strlen($entry) - 1, 1) != '/') $entry .= '/';
-        foreach (glob($entry . '*', GLOB_MARK) as $file) if (!rmfs($file)) return false;
+    if (is_file($entry)) return @unlink($entry);
+    else {
+        if (substr($entry, strlen($entry) - 1, 1) != DIRECTORY_SEPARATOR) $entry .= DIRECTORY_SEPARATOR;
+        foreach (glob("$entry{,.}*[!.]*", GLOB_MARK | GLOB_BRACE) as $file) if (!rmfs($file)) return false;
         return @rmdir($entry);
     }
 }

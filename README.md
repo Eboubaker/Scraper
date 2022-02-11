@@ -1,5 +1,4 @@
 # Scrapper
-Media Web-Scrapper.  
 With this tool you can download videos & images from popular websites.
 
 # Quickstart

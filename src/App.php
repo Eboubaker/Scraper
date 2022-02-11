@@ -2,7 +2,7 @@
 
 namespace Eboubaker\Scrapper;
 
-use Eboubaker\Scrapper\Contracts\Scrapper;
+use Eboubaker\Scrapper\Concerns\ScrapperUtils;
 use Eboubaker\Scrapper\Exception\InvalidArgumentException;
 use Eboubaker\Scrapper\Exception\UrlNotSupportedException;
 use Eboubaker\Scrapper\Exception\UserException;
@@ -11,6 +11,9 @@ use Exception;
 use Garden\Cli\Args;
 use Garden\Cli\Cli;
 
+/**
+ * @author Eboubaker Bekkouche <eboubakkar@gmail.com>
+ */
 final class App
 {
     private static Args $arguments;
@@ -28,8 +31,6 @@ final class App
             return $e->getCode();
         } catch (UserException $e) {
             error($e->getMessage());
-            if (debug_enabled())
-                dump_exception($e);
             return $e->getCode();
         } catch (Exception $e) {
             // display nice error message to console, or maybe bad??
@@ -54,6 +55,8 @@ final class App
         });
         // parse arguments
         App::$arguments = self::parse_arguments($args);
+
+        // show version and exit if requested version option.
         if (App::args()->getOpt('version')) {
             tell("v{}", json_decode(@file_get_contents(rootpath('composer.json')) ?? "{\"version\":\"undefined\"}", true)["version"]);
             exit(0);
@@ -76,13 +79,13 @@ final class App
             throw new InvalidArgumentException("url was not provided");
         }
 
-        list($html_document, $final_url) = Scrapper::load_webpage($url);
+        list($html_document, $final_url) = ScrapperUtils::load_webpage($url);
 
         info("attempting to determine which extractor to use");
-        $scrapper = Scrapper::getRequiredScrapper($final_url);
+        $scrapper = ScrapperUtils::getRequiredScrapper($final_url, $html_document);
         info("using {}", (new \ReflectionClass($scrapper))->getShortName());
 
-        $scrapper->download_media_from_html_document($html_document);
+        $scrapper->download_media_from_html_document($final_url, $html_document);
         return 0;
     }
 
@@ -105,6 +108,7 @@ final class App
             ->opt("out:o", "set output path, default is current working directory(cmd path)")
             ->opt("verbose:v", "display more useful information", false, 'bool')
             ->opt("version", "show version", false, 'bool')
+            ->opt('header:h', "Add a header to the request (like Set-Cookie), can be repeated", false, "string[]")
             ->arg("url", "Post Url");
         try {
             if (count($argv) === 1)

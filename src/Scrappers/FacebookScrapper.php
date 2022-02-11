@@ -2,19 +2,30 @@
 
 namespace Eboubaker\Scrapper\Scrappers;
 
+use Eboubaker\Scrapper\Concerns\ScrapperUtils;
 use Eboubaker\Scrapper\Contracts\Scrapper;
+use Eboubaker\Scrapper\Exception\WebPageNotLoadedException;
 
-class FacebookScrapper extends Scrapper
+/**
+ * @author Eboubaker Bekkouche <eboubakkar@gmail.com>
+ */
+class FacebookScrapper implements Scrapper
 {
-    public static function can_scrap($url): bool
+    use ScrapperUtils;
+
+    public static function can_scrap(string $final_url, ?string $html_document): bool
     {
-        return !!preg_match("/https?:\/\/((web|m|www)\.)?facebook\.com\//", $url);
+        return !!preg_match("/https?:\/\/((web|m|www)\.)?facebook\.com\//", $final_url);
     }
 
     /**
+     * @throws WebPageNotLoadedException
      */
-    function download_media_from_html_document(string $html_document): string
+    function download_media_from_html_document(string $final_url, string $html_document): string
     {
+        if (preg_match("/\/login\/\?next=/", $final_url)) {
+            throw new WebPageNotLoadedException("Facebook redirected you to the login page, This post might be private, try logging in first");
+        }
         $data_bag = collect_all_json($html_document);
         $image = data_get($data_bag, array_search_match($data_bag, [
                 "currMedia.image.uri",

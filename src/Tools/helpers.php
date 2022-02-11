@@ -1,18 +1,7 @@
 <?php
 
-use FFMpeg\Exception\ExecutableNotFoundException;
-use FFMpeg\FFMpeg;
-use FFMpeg\FFProbe\DataMapping\Stream;
-use FFMpeg\Format\FormatInterface;
 use Symfony\Component\DomCrawler\Crawler;
 use Tightenco\Collect\Support\Arr;
-
-if (!function_exists("str_starts_with")) {// for php < 8.0
-    function str_starts_with($haystack, $needle): bool
-    {
-        return $needle === substr($haystack, 0, strlen($needle));
-    }
-}
 
 
 /**
@@ -20,6 +9,7 @@ if (!function_exists("str_starts_with")) {// for php < 8.0
  */
 function format(string $text, ...$args): string
 {
+
     return sprintf(str_replace("{}", "%s", $text), ...$args);
 }
 
@@ -30,7 +20,7 @@ function info(string $msg, ...$args)
 
 function tell(string $msg, ...$args)
 {
-    echo format($msg, ...$args) . "\n";
+    fwrite(STDOUT, format($msg, ...$args) . "\n");
 }
 
 function notice(string $msg, ...$args)
@@ -137,15 +127,15 @@ function human_readable_size($bytes): string
 }
 
 /**
- * return value if condition is true otherwise empty string
+ * return value if condition is true otherwise empty string (by default)
  * @param callable|bool $condition
  * @author Eboubakkar Bekkouche <eboubakkar@gmail.com>
  */
-function putif($condition, $value)
+function putif($condition, $value, $else = '')
 {
     if (is_callable($condition))
-        return $condition() ? $value : '';
-    return $condition ? $value : '';
+        return $condition() ? $value : $else;
+    return $condition ? $value : $else;
 }
 
 /**
@@ -179,33 +169,6 @@ function rootpath(string $append = ''): string
 function consolepath(string $append = ''): string
 {
     return getcwd() . putif($append !== '', DIRECTORY_SEPARATOR . $append);
-}
-
-/**
- * @param Stream $video
- * @param Stream $audio
- * @param string $output_file
- * @param FormatInterface $format
- * @return string
- * @throws ExecutableNotFoundException
- */
-function merge_video_with_audio(Stream          $video,
-                                Stream          $audio,
-                                string          $filename,
-                                FormatInterface $format): string
-{
-    $ffmpeg = FFMpeg::create();
-    $w = $h = 0;
-    try {
-        list($w, $h) = [$video->getDimensions()->getWidth(), $video->getDimensions()->getHeight()];
-    } catch (Exception $e) {
-        debug("getDimensions() failed {}:{}", __FILE__, __LINE__);
-    }
-    info("Will merge Audio with Video ({}x{})", $w, $h);
-    $vid = $ffmpeg->open($video->get('url'));
-    $vid->addFilter(new \FFMpeg\Filters\Audio\SimpleFilter(array('-i', $audio->get('url'), '-shortest')));
-    $vid->save($format, $filename);
-    return $filename;
 }
 
 /**
@@ -301,35 +264,43 @@ function array_dot_find_value(array $array, string $dot_path, &$accumulator, $cu
 }
 
 /**
- * recursively find in a multi-dimensional array an item which contains all the given keys
+ * recursively find in a multi-dimensional array an item which contains all the given keys.
  * @author Eboubakkar Bekkouche <eboubakkar@gmail.com>
  */
-function array_search_match(array $array, $dot_keys, $path = ''): ?string
+function array_search_match(array $array, $keys, $path = ''): ?string
 {
-    $dot_keys = (array)$dot_keys;// allow string or array
+    $keys = (array)$keys;// allow string or array
     // array must have the given key and also all adjacent keys
     $found_count = 0;
-    foreach ($dot_keys as $key => $regex) {
+    foreach ($keys as $key => $regex) {
         if (is_string($key)) {// $regex is real regex
             $v = Arr::get($array, $key, fn() => false);
             if (is_callable($v))
                 break; // not found(default value)
-            else if (!is_numeric($v) && !is_string($v))
+            else if (empty($key)) {// regex searching without nesting
+                foreach ($array as $k => $i) {
+                    if (preg_match($regex, $i)) {
+                        return strval($k);
+                    }
+                }
+                break;
+            } else if (!is_numeric($v) && !is_string($v))
                 break;// we can't run regex on array
             else if (!preg_match($regex, $v))
                 break;// regex didnt match
+
         } else {// $regex is not a regex
             if (!Arr::has($array, $regex))
                 break;// key not found
         }
         ++$found_count;
     }
-    if ($found_count === count($dot_keys)) {
+    if ($found_count === count($keys)) {
         return ltrim($path, '.');
     }
     foreach ($array as $key => $item) {
         if (is_array($item)) {
-            $found = array_search_match($item, $dot_keys, $path . '.' . $key);
+            $found = array_search_match($item, $keys, $path . '.' . $key);
             if ($found) return $found;
         }
     }
@@ -385,6 +356,7 @@ function collect_all_json(string $html): array
 {
     $regex_valid_json = <<<'EOF'
     /
+
     (?(DEFINE)
      (?<number>   -? (?= [1-9]|0(?!\d) ) \d+ (\.\d+)? ([eE] [+-]? \d+)? )
      (?<boolean>   true | false | null )
@@ -393,7 +365,9 @@ function collect_all_json(string $html): array
      (?<pair>      \s* (?&string) \s* : (?&json)  )
      (?<object>    \{  (?:  (?&pair)  (?: , (?&pair)  )*  )?  \s* \} )
      (?<json>   \s* (?: (?&number) | (?&boolean) | (?&string) | (?&array) | (?&object) ) \s* )
-     (?<realjson>   \s* (?: (?&array) | (?&object) ) \s* )
+     (?<realobject>    \{  (?:  (?&pair)  (?: , (?&pair)  )*  )  \s* \} )
+     (?<realarray>     \[  (?:  (?&json)  (?: , (?&json)  )*  )  \s* \] )
+     (?<realjson>   \s* (?: (?&realarray) | (?&realobject) ) \s* )
     )
     (?&realjson)
     /six
@@ -410,7 +384,7 @@ function collect_all_json(string $html): array
             return $F;
         }))
         ->flatten()
-        // remove preg_match empty strings garbage
+        // remove preg_match empty groups garbage
         ->filter(fn($j) => $j && strlen($j))
         ->map(fn($obj) => json_decode($obj, true))
         ->filter(function (array $arr) {
@@ -421,4 +395,35 @@ function collect_all_json(string $html): array
         ->values()
         ->all();
     return $data_bag;
+}
+
+/**
+ * Append something to a log file
+ * @param string $str
+ * @param string|null $fname which logfile to use
+ * @author Eboubaker Bekkouche <eboubakkar@gmail.com>
+ */
+function flog(string $str, ?string $fname = null)
+{
+    if ($fname)
+        file_put_contents(logfile($fname), $str . PHP_EOL, FILE_APPEND);
+    else
+        file_put_contents(logfile(), $str . PHP_EOL, FILE_APPEND);
+}
+
+/**
+ * @return string
+ */
+function get_ffmpeg_path(): ?string
+{
+    $local_path = rootpath("bin/ffmpeg" . putif(host_is_windows_machine(), ".exe"));
+    if (file_exists($local_path)) return $local_path;
+    exec(putif(host_is_windows_machine(), "where", "which") . " ffmpeg", $r);
+    $path = trim(explode("\n", $r)[0]);
+    if (empty($path)) {
+        // TODO: Download ffmpeg binaries and return the local_path
+        return null;
+    } else {
+        return $path;
+    }
 }

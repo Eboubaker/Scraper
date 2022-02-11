@@ -18,7 +18,7 @@ function main(array $argv): int
     $rname = $argv[1];
     if ($rname[0] !== 'v')
         $rname = 'v' . $rname;
-    echo "Making release: $rname" . PHP_EOL;
+    echo "Making : $rname" . PHP_EOL;
 
     try {
         $win_target = make_release("winx86", $rname);

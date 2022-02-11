@@ -63,6 +63,8 @@ final class App
         }
         // disable pcre jit because we are dealing with big chunks of text
         ini_set("pcre.jit", '0');
+        ini_set("pcre.backtrack_limit", '20000000');
+        ini_set("pcre.recursion_limit", '20000000');
     }
 
     /**

@@ -23,6 +23,13 @@ function main(array $argv): int
     try {
         $win_target = make_release("winx86", $rname);
         $linux_target = make_release("linux", $rname);
+
+        if (DIRECTORY_SEPARATOR == "\\") {
+            echo "Press enter to push this release to github...\r\n";
+            system("pause");
+        } else
+            system("read -n1 -r -s -p \"Press enter to push this release to github...\" ; echo");
+
         // use github cli to create release, generate notes and upload the zip release.
         echo "Pushing: $rname\r\n";
         system("gh release create $rname --generate-notes " . quote($win_target) . " " . quote($linux_target), $code);
@@ -106,7 +113,7 @@ function make_release(string $name, string $rname): string
         if (!$target)
             throw new Exception("$name zip not found");
         return $target;
-    } catch (\Exception $e) {
+    } catch (Exception $e) {
         rmfs($release_container);
         @unlink($release_zip_output);
         throw $e;
@@ -162,13 +169,13 @@ function zip_folder($source, $outfile, &$error): bool
     foreach ($files as $file) {
         if (!$file->isDir()) {
             $filePath = $file->getRealPath();
-            $relativePath = substr($filePath, strlen(dirname($rootPath)) + 1);
+            $relativePath = str_replace('\\', '/', substr($filePath, strlen(dirname($rootPath)) + 1));
             $zip->addFile($filePath, $relativePath);
         }
     }
     try {
         if (!$zip->close()) return false;
-    } catch (\Exception $e) {
+    } catch (Exception $e) {
         $error = $e->getMessage();
         return false;
     }

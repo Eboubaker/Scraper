@@ -10,6 +10,7 @@ error_reporting(E_ALL);
 
 function main(array $argv): int
 {
+
     if (count($argv) === 1) {
         fwrite(STDERR, "Provide a release name" . PHP_EOL);
         return 1;
@@ -24,11 +25,15 @@ function main(array $argv): int
         $win_target = make_release("winx86", $rname);
         $linux_target = make_release("linux", $rname);
 
-        if (DIRECTORY_SEPARATOR == "\\") {
-            echo "Press enter to push this release to github...\r\n";
-            system("pause");
-        } else
-            system("read -n1 -r -s -p \"Press enter to push this release to github...\" ; echo");
+        echo "Are you sure you want to push these assets to github?(yes/no): ";
+        $handle = fopen("php://stdin", "r");
+        $line = strtolower(trim(fgets($handle)));
+        if ($line !== 'yes' && $line !== 'y') {
+            echo "ABORTING!\n";
+            return 2;
+        }
+        fclose($handle);
+        echo "\n";
 
         // use github cli to create release, generate notes and upload the zip release.
         echo "Pushing: $rname\r\n";

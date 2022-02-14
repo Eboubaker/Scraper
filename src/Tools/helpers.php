@@ -1,8 +1,7 @@
-<?php
+<?php /** @noinspection PhpFullyQualifiedNameUsageInspection */
 
-use Symfony\Component\DomCrawler\Crawler;
-use Tightenco\Collect\Support\Arr;
-
+const TTY_UP = "\x1b[A";// https://stackoverflow.com/a/10058082/10387008
+const TTY_FLUSH = "\33[2K\r"; // https://stackoverflow.com/a/1508589/10387008
 
 /**
  * @author Eboubakkar Bekkouche <eboubakkar@gmail.com>
@@ -61,7 +60,7 @@ function style(string $text, ...$styles): string
         ->map(fn($s) => explode(',', $s))
         ->flatten()
         ->map(fn($c) => trim($c))
-        ->filter(fn($c) => strlen($c))
+        ->filter(fn($c) => !!strlen($c))
         ->filter(fn($c) => !in_array($c, $codes, true));
     if ($styles->count() === 0) return $text;
     $formatMap = $styles->map(fn($v) => $codes[$v])->all();
@@ -147,19 +146,32 @@ function debug_enabled(): bool
 }
 
 /**
- * get the directory of the vendor folder (the project root).
- *
- * if failed to find vendor directory then return the relative (./DIRECTORY_SEPARATOR)
+ * get path to the project root,
+ * if running as phar then return the directory of the phar file.
  * @author Eboubakkar Bekkouche <eboubakkar@gmail.com>
  */
 function rootpath(string $append = ''): string
 {
-    $append = str_replace(["\\", "/"], DIRECTORY_SEPARATOR, $append);
-    $curr = dirname(__FILE__);
-    $tries = 5;
-    while (!file_exists($curr . DIRECTORY_SEPARATOR . 'vendor') && --$tries != 0)
-        $curr = dirname($curr);
-    return $curr . putif($append !== '', DIRECTORY_SEPARATOR . $append);
+    $dir = dirname(Phar::running(false));
+    if (!$dir) {
+        $dir = realpath('.');
+        $tries = 5;
+        while (!file_exists(normalize($dir . '/vendor')) && --$tries != 0)
+            $dir = dirname($dir);
+        if ($tries == 0) throw new Error("root path not resolved");
+    }
+    $append = normalize($append);
+    return $dir . putif($append !== '', DIRECTORY_SEPARATOR . $append);
+}
+
+
+/**
+ * make path cross platform
+ * @author Eboubaker Bekkouche <eboubakkar@gmail.com>
+ */
+function normalize(string $path): string
+{
+    return str_replace(["\\", "/"], DIRECTORY_SEPARATOR, $path);
 }
 
 /**
@@ -251,8 +263,8 @@ function array_preg_find_value_paths(array $haystack, string $pattern, &$accumul
 function array_dot_find_value(array $array, string $dot_path, &$accumulator, $current_path = ""): bool
 {
     $found_something = false;
-    if (Arr::has($array, $dot_path)) {
-        $accumulator[][$current_path] = Arr::get($array, $dot_path);
+    if (\Tightenco\Collect\Support\Arr::has($array, $dot_path)) {
+        $accumulator[][$current_path] = data_get($array, $dot_path);
         $found_something = true;
     }
     foreach ($array as $key => $item) {
@@ -272,25 +284,25 @@ function array_search_match(array $array, $keys, $path = ''): ?string
     $keys = (array)$keys;// allow string or array
     // array must have the given key and also all adjacent keys
     $found_count = 0;
-    foreach ($keys as $key => $regex) {
-        if (is_string($key)) {// $regex is real regex
-            $v = Arr::get($array, $key, fn() => false);
+    foreach ($keys as $key => $xvar) {
+        if (is_string($key)) {// $xvar is real regex
+            $v = data_get($array, $key, fn() => false);
             if (is_callable($v))
                 break; // not found(default value)
             else if (empty($key)) {// regex searching without nesting
                 foreach ($array as $k => $i) {
-                    if (preg_match($regex, $i)) {
+                    if (preg_match($xvar, $i)) {
                         return strval($k);
                     }
                 }
                 break;
             } else if (!is_numeric($v) && !is_string($v))
                 break;// we can't run regex on array
-            else if (!preg_match($regex, $v))
+            else if (!preg_match($xvar, $v))
                 break;// regex didnt match
 
-        } else {// $regex is not a regex
-            if (!Arr::has($array, $regex))
+        } else {// $xvar is not a regex
+            if (!\Tightenco\Collect\Support\Arr::has($array, $xvar))
                 break;// key not found
         }
         ++$found_count;
@@ -356,7 +368,6 @@ function collect_all_json(string $html): array
 {
     $regex_valid_json = <<<'EOF'
     /
-
     (?(DEFINE)
      (?<number>   -? (?= [1-9]|0(?!\d) ) \d+ (\.\d+)? ([eE] [+-]? \d+)? )
      (?<boolean>   true | false | null )
@@ -373,11 +384,11 @@ function collect_all_json(string $html): array
     /six
     EOF;
 
-    $data_bag = collect((new Crawler($html))
+    $data_bag = collect((new \Symfony\Component\DomCrawler\Crawler($html))
         // find script tags
         ->filter("script")
         // find all json inside the scripts
-        ->each(function (Crawler $node) use ($regex_valid_json) {
+        ->each(function (\Symfony\Component\DomCrawler\Crawler $node) use ($regex_valid_json) {
             if (isset($F)) unset($F);
             preg_match_all($regex_valid_json, $node->text(null, false), $F, PREG_UNMATCHED_AS_NULL);
             if (preg_last_error() !== PREG_NO_ERROR) error(preg_last_error_msg());

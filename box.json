@@ -1,0 +1,17 @@
+{
+  "main": "src/scrap.php",
+  "output": "releases/scrap.phar",
+  "directories": [
+    "src"
+  ],
+  "finder": [
+    {
+      "name": "*.php",
+      "exclude": [
+        "test",
+        "tests"
+      ],
+      "in": "vendor"
+    }
+  ]
+}

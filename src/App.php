@@ -2,25 +2,29 @@
 
 namespace Eboubaker\Scrapper;
 
+use Eboubaker\Scrapper\Concerns\ReadsArguments;
 use Eboubaker\Scrapper\Concerns\ScrapperUtils;
+use Eboubaker\Scrapper\Concerns\StoresCache;
 use Eboubaker\Scrapper\Exception\InvalidArgumentException;
+use Eboubaker\Scrapper\Exception\RequirementFailedException;
 use Eboubaker\Scrapper\Exception\UrlNotSupportedException;
 use Eboubaker\Scrapper\Exception\UserException;
 use ErrorException;
 use Exception;
-use Garden\Cli\Args;
-use Garden\Cli\Cli;
 
 /**
  * @author Eboubaker Bekkouche <eboubakkar@gmail.com>
  */
 final class App
 {
-    private static Args $arguments;
+    use StoresCache, ReadsArguments;
+
+    private static bool $bootstrapped = false;
 
     public static function run(array $args): int
     {
         try {
+            self::check_platform();
             self::bootstrap($args);
             return self::run_main();
         } catch (InvalidArgumentException $e) {
@@ -45,7 +49,7 @@ final class App
      */
     private static function bootstrap(array $args)
     {
-        // convert warnings to exceptions.
+        // convert errors to exceptions.
         set_error_handler(function (int    $errno,
                                     string $errstr,
                                     string $errfile,
@@ -53,18 +57,20 @@ final class App
             /** @noinspection PhpUnhandledExceptionInspection */
             throw new ErrorException($errstr, $errno, 1, $errfile, $errline);
         });
+
         // parse arguments
         App::$arguments = self::parse_arguments($args);
-
         // show version and exit if requested version option.
-        if (App::args()->getOpt('version')) {
-            tell("v{}", json_decode(@file_get_contents(rootpath('composer.json')) ?? "{\"version\":\"undefined\"}", true)["version"]);
-            exit(0);
-        }
+        if (App::args()->getOpt('version')) die("v0.0.1" . PHP_EOL);
+
+        // make logs directory if not exists
+        if (!file_exists(dirname(logfile()))) mkdir(dirname(logfile()));
+
         // disable pcre jit because we are dealing with big chunks of text
-        ini_set("pcre.jit", '0');
+        ini_set("pcre.jit", '0');// TODO: check if required (test big response)
         ini_set("pcre.backtrack_limit", '20000000');
         ini_set("pcre.recursion_limit", '20000000');
+        self::$bootstrapped = true;
     }
 
     /**
@@ -91,34 +97,25 @@ final class App
         return 0;
     }
 
-
-    public static function args(): Args
-    {
-        return self::$arguments;
-    }
-
     /**
-     * parseArgs Command Line Interface (CLI) utility function.
-     * @throws InvalidArgumentException
-     * @author              Patrick Fisher <patrick@pwfisher.com>
-     * @see                 https://github.com/pwfisher/CommandLine.php
+     * make sure all required extensions are enabled
+     * @throws RequirementFailedException
      */
-    public static function parse_arguments($argv = null): Args
+    private static function check_platform()
     {
-        $cli = Cli::create()
-            ->description("Download media from a post url")
-            ->opt("out:o", "set output path, default is current working directory(cmd path)")
-            ->opt("verbose:v", "display more useful information", false, 'bool')
-            ->opt("version", "show version", false, 'bool')
-            ->opt('header:h', "Add a header to the request (like Set-Cookie), can be repeated", false, "string[]")
-            ->arg("url", "Post Url");
-        try {
-            if (count($argv) === 1)
-                array_push($argv, "--help");
-            return $cli->parse($argv, in_array("--help", $argv));
-        } catch (\Throwable $e) {
-            throw new InvalidArgumentException("Invalid options", $e);
-        }
+//        if (!function_exists('opcache_get_status') || !opcache_get_status()) {
+//            throw new RequirementFailedException("zend opcache is not enabled, edit file " . php_ini_loaded_file() . " and enable both opcache.enable_cli and opcache.enable");
+//        }
+//        if (!extension_loaded('parallel')) {
+//            throw new RequirementFailedException("required php extension parallel is not installed: https://www.php.net/manual/en/book.parallel.php");
+//        }
+//        if (!extension_loaded('curl')) {
+//            throw new RequirementFailedException("required php extension curl is not enabled: modify php.ini and enable it: " . php_ini_loaded_file());
+//        }
     }
 
+    public static function bootstrapped(): bool
+    {
+        return self::$bootstrapped;
+    }
 }

@@ -3,7 +3,7 @@
 namespace Eboubaker\Scrapper\Exception;
 
 
-class WebPageNotLoadedException extends UserException
+class ConnectionException extends UserException
 {
     protected $code = 16;
 }

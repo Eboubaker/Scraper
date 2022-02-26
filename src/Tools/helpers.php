@@ -1,14 +1,13 @@
-<?php /** @noinspection PhpFullyQualifiedNameUsageInspection */
+<?php /** @noinspection PhpUnnecessaryFullyQualifiedNameInspection,PhpFullyQualifiedNameUsageInspection */
 
-const TTY_UP = "\x1b[A";// https://stackoverflow.com/a/10058082/10387008
-const TTY_FLUSH = "\33[2K\r"; // https://stackoverflow.com/a/1508589/10387008
+const TTY_UP = "\x1b[A";
+const TTY_FLUSH = "\33[2K\r";
 
 /**
  * @author Eboubakkar Bekkouche <eboubakkar@gmail.com>
  */
 function format(string $text, ...$args): string
 {
-
     return sprintf(str_replace("{}", "%s", $text), ...$args);
 }
 
@@ -19,7 +18,7 @@ function info(string $msg, ...$args)
 
 function tell(string $msg, ...$args)
 {
-    fwrite(STDOUT, format($msg, ...$args) . "\n");
+    echo format($msg, ...$args) . "\n";
 }
 
 function notice(string $msg, ...$args)
@@ -46,7 +45,6 @@ function debug(string $msg, ...$args)
 
 function style(string $text, ...$styles): string
 {
-    // stolen: https://stackoverflow.com/a/69580828/10387008
     $codes = [
         'bold' => 1,
         'italic' => 3, 'underline' => 4, 'strikethrough' => 9,
@@ -115,13 +113,12 @@ function bytes(string $format)
     }
 }
 
-// stolen: https://stackoverflow.com/a/66573396/10387008
 function human_readable_size($bytes): string
 {
-    if ($bytes > 0) {
+    if ($bytes >= 1) {
         $base = floor(log($bytes) / log(1024));
         $units = array("B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"); //units of measurement
-        return number_format(($bytes / pow(1024, floor($base))), 3) . " $units[$base]";
+        return rtrim(rtrim(number_format(($bytes / pow(1024, $base)), 2) . " $units[$base]", '0'), '.');
     } else return "0 bytes";
 }
 
@@ -142,6 +139,8 @@ function putif($condition, $value, $else = '')
  */
 function debug_enabled(): bool
 {
+    // TODO: optimize
+    if (!\Eboubaker\Scrapper\App::bootstrapped()) return true;
     return boolval(\Eboubaker\Scrapper\App::args()->getOpt('verbose'));
 }
 
@@ -205,12 +204,12 @@ function download_static_media_url(string $url, string $filename): string
 /**
  * @author Eboubakkar Bekkouche <eboubakkar@gmail.com>
  */
-function logfile(string $name = 'scrapper.log')
+function logfile(?string $name = 'scrapper.log')
 {
+    if ($name == null) $name = 'scrapper.log';
     return rootpath('logs/' . $name);
 }
 
-// stolen: https://stackoverflow.com/a/52927815/10387008
 function setClipboard(string $new): bool
 {
     if (PHP_OS_FAMILY === "Windows") {
@@ -339,7 +338,6 @@ function array_preg_find_key_paths(array $haystack, string $pattern, &$accumulat
     return $found_something;
 }
 
-// stolen: https://stackoverflow.com/a/42058764/10387008
 function filter_filename($name): string
 {
     // remove illegal file system characters https://en.wikipedia.org/wiki/Filename#Reserved_characters_and_words
@@ -408,33 +406,53 @@ function collect_all_json(string $html): array
     return $data_bag;
 }
 
-/**
- * Append something to a log file
- * @param string $str
- * @param string|null $fname which logfile to use
- * @author Eboubaker Bekkouche <eboubakkar@gmail.com>
- */
-function flog(string $str, ?string $fname = null)
+
+function make_ffmpeg(): ?\FFMpeg\FFMpeg
 {
-    if ($fname)
-        file_put_contents(logfile($fname), $str . PHP_EOL, FILE_APPEND);
-    else
-        file_put_contents(logfile(), $str . PHP_EOL, FILE_APPEND);
+    try {
+        if (\Eboubaker\Scrapper\App::cache_has('ffmpeg')) return \Eboubaker\Scrapper\App::cache_get('ffmpeg');
+        $ffmpeg = \FFMpeg\FFMpeg::create(host_is_windows_machine() ? [
+            "ffmpeg.binaries" => rootpath("bin/ffmpeg/ffmpeg.exe"),
+            "ffprobe.binaries" => rootpath("bin/ffmpeg/ffprobe.exe"),
+        ] : []);
+        \Eboubaker\Scrapper\App::cache_set('ffmpeg', $ffmpeg);
+        return $ffmpeg;
+    } catch (\Exception $e) {
+        debug("Error: ");
+        if (debug_enabled()) dump_exception($e);
+    }
+    return null;
+}
+
+
+function headers_associative_to_array(array $headers): array
+{
+    return collect($headers)->map(fn($value, $header) => "$header: $value")->all();
+}
+
+function headers_array_to_associative(string $header_raw): array
+{
+    $parts = explode(':', $header_raw);
+    return [$parts[0] => implode('', array_slice($parts, 1)), 'parts' => count($parts)];
 }
 
 /**
- * @return string
+ * returns $str with length of max_len+3, if it overflows
  */
-function get_ffmpeg_path(): ?string
+function strip_str($str, $max_len)
 {
-    $local_path = rootpath("bin/ffmpeg" . putif(host_is_windows_machine(), ".exe"));
-    if (file_exists($local_path)) return $local_path;
-    exec(putif(host_is_windows_machine(), "where", "which") . " ffmpeg", $r);
-    $path = trim(explode("\n", $r)[0]);
-    if (empty($path)) {
-        // TODO: Download ffmpeg binaries and return the local_path
-        return null;
-    } else {
-        return $path;
+    if (strlen($str) > $max_len) {
+        return substr($str, 0, $max_len) . "...";
     }
+    return $str;
+}
+
+
+function make_monolog($name = 'main', $level = \Monolog\Logger::DEBUG): \Psr\Log\LoggerInterface
+{
+    $log = new \Monolog\Logger($name);
+    $handler = new \Monolog\Handler\StreamHandler(logfile(), $level, true, null, true);
+    $handler->setFormatter(new \Monolog\Formatter\LineFormatter("%datetime% %channel% [%level_name%] %message% %context% %extra%\n"));
+    $log->pushHandler($handler);
+    return $log;
 }

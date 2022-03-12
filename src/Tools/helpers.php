@@ -113,13 +113,13 @@ function bytes(string $format)
     }
 }
 
+const H_SIZE_UNITS = array("B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"); //units of measurement
 function human_readable_size($bytes): string
 {
     if ($bytes >= 1) {
         $base = floor(log($bytes) / log(1024));
-        $units = array("B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"); //units of measurement
-        return rtrim(rtrim(number_format(($bytes / pow(1024, $base)), 2) . " $units[$base]", '0'), '.');
-    } else return "0 bytes";
+        return rtrim(rtrim(number_format(($bytes / pow(1024, $base)), 2) . " " . H_SIZE_UNITS[$base], '0'), '.');
+    } else return "0 B";
 }
 
 /**

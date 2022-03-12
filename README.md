@@ -1,68 +1,58 @@
 # Scrapper
+
 With this tool you can download videos & images from popular websites.
 
 # Quickstart
 
-Directly run with docker
+Download [latest release](https://github.com/Eboubaker/Scrapper/releases/latest) or directly run with Docker
 
 ```bash
-docker run -it --rm eboubaker/scrapper <args>
+docker run -it --rm -v %cd%:/app/downloads eboubaker/scrapper <args>
 ```
 
-or build the image yourself
+> Replace `%cd%` with `$(pwd)` on linux
 
-```bash
-git clone https://github.com/Eboubaker/Scrapper
-cd Scrapper
-docker build -t eboubaker/scrapper .
-docker run -it --rm eboubaker/scrapper <args>
+USAGE
+
 ```
+usage: scrap [<options>] [<args>]
 
-> Run without arguments to see usage message
+Download media from a post url
 
-# Development
+OPTIONS
+  --header, -h    Add a header to the request (like Cookie), can be repeated
+  --help, -?      Display this help.
+  --output, -o    set output directory, default is current working directory
+  --verbose, -v   display more useful information
+  --version       show version
 
-### Requirements
-
-- php >= 7.4
-- composer
-- php-curl extension
-- php-dom extension
-- php-json extension
-- php-mbstring extension
-
-```console
-git clone https://github.com/Eboubaker/Scrapper
-cd scrapper
-composer install
-php src/scrapper.php <args>
+ARGUMENTS
+  url   Post Url
 ```
-> You *might* need to remove composer.lock before doing `composer install`
 
 # RoadMap
 
-### 🔃 Reddit scrapper
-
-- 🔃 download image from a post url
-- 🔃 download video from a post url
-- 🔃 download GIF from a post url
-
-### 🔃 Facebook scrapper
+### Facebook scrapper
 
 - ✅ download image from a post url
 - ✅ download video from a post url
-- 🔃 cover edge cases
 
-### 🔃 Youtube scrapper
+### Reddit scrapper
 
-- 🔃 download video
-- 🔃 download playlist
+- ◼ download image from a post url
+- ◼ download video from a post url
+- ◼ download GIF as video from a post url
 
-### 🔃 Instagram scrapper
+### Youtube scrapper
 
-- 🔃 download image from a post url
-- 🔃 download video from a post url
-- 🔃 download video from a story
-- 🔃 download image from a story
+- ◼ download video
+- ◼ download playlist
 
-### 🔃 Make a web interface.
+### Instagram scrapper
+
+- ◼ download image from a post url
+- ◼ download video from a post url
+- ◼ download video from a story
+- ◼ download image from a story
+
+### ◼ Make a web interface.

@@ -145,6 +145,15 @@ function debug_enabled(): bool
 }
 
 /**
+ * @author Eboubakkar Bekkouche <eboubakkar@gmail.com>
+ */
+function running_as_phar(): bool
+{
+    return !empty(Phar::running(false));
+}
+
+
+/**
  * get path to the project root,
  * if running as phar then return the directory of the phar file.
  * @author Eboubakkar Bekkouche <eboubakkar@gmail.com>
@@ -364,6 +373,14 @@ function array_preg_find_key_paths(array $haystack, string $pattern, &$accumulat
         }
     }
     return $found_something;
+}
+
+function map_key_path(array $source, array $paths, $level = 0): array
+{
+    return collect($paths)->mapWithKeys(function ($p) use ($source, $level) {
+        $vp = implode('.', array_slice($p, 0, $level ? -1 * $level : null));
+        return [$vp => data_get($source, $vp)];
+    })->all();
 }
 
 function filter_filename($name): string

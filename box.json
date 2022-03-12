@@ -13,5 +13,6 @@
       ],
       "in": "vendor"
     }
-  ]
+  ],
+  "check-requirements": false
 }

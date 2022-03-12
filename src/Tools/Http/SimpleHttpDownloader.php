@@ -1,6 +1,6 @@
 <?php
 
-namespace Eboubaker\Scrapper\Tools;
+namespace Eboubaker\Scrapper\Tools\Http;
 
 use Eboubaker\Scrapper\Concerns\ScrapperUtils;
 use Eboubaker\Scrapper\Contracts\Downloader;
@@ -11,7 +11,7 @@ use GuzzleHttp\RequestOptions as ReqOpt;
  * Downloads a resource with a single http request
  * @author Eboubaker Bekkouche <eboubakkar@gmail.com>
  */
-class SimpleHttpDownloader implements Downloader
+final class SimpleHttpDownloader implements Downloader
 {
     private string $resource_url;
 
@@ -38,7 +38,7 @@ class SimpleHttpDownloader implements Downloader
                 CURLOPT_BUFFERSIZE => $buffer_size
             ]
         ]);
-        $name = tempnam(sys_get_temp_dir(), time() . ".scrapper");
+        $name = tempnam(sys_get_temp_dir(), "scr");
         $out = fopen($name, 'ab+');
         $stream = $response->getBody();
         while (!$stream->eof()) {
@@ -46,7 +46,8 @@ class SimpleHttpDownloader implements Downloader
             fwrite($out, $read);
         }
         fclose($out);
-        return $name;
+        rename($name, $file_name);
+        return $file_name;
     }
 
     function get_resource_url(): string

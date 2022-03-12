@@ -497,7 +497,7 @@ function make_monolog($name = 'main', $level = \Monolog\Logger::DEBUG): \Psr\Log
 {
     $log = new \Monolog\Logger($name);
     $handler = new \Monolog\Handler\StreamHandler(logfile(), $level, true, null, true);
-    $handler->setFormatter(new \Monolog\Formatter\LineFormatter("%datetime% %channel% [%level_name%] %message% %context% %extra%\n"));
+    $handler->setFormatter(new \Monolog\Formatter\LineFormatter("%datetime% [%level_name%] %channel% %message% %context% %extra%\n"));
     $log->pushHandler($handler);
     return $log;
 }

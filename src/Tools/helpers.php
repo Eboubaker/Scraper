@@ -174,6 +174,8 @@ function rootpath(string $append = ''): string
  */
 function normalize(string $path): string
 {
+    $path = str_replace("\\\\", "\\", $path);
+    $path = str_replace("//", "/", $path);
     return str_replace(["\\", "/"], DIRECTORY_SEPARATOR, $path);
 }
 

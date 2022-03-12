@@ -31,8 +31,8 @@ trait StoresCache
         return $v;
     }
 
-    public static function cache_get(string $key)
+    public static function cache_get(string $key, $default = null)
     {
-        return data_get(self::$store, $key);
+        return data_get(self::$store, $key, $default);
     }
 }

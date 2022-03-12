@@ -80,6 +80,23 @@ final class App
         // make logs directory if not exists
         if (!file_exists(dirname(logfile()))) mkdir(dirname(logfile()));
 
+        if (getenv("SCRAPPER_DOCKERIZED")) {
+            if (!is_dir(rootpath('downloads'))) {
+                notice("The app is running in docker, You need to mount a volume so downloads can be saved: \ndocker run -it -v PATH_TO_DOWNLOADS:/app/downloads eboubaker/scrapper ...");
+                throw new InvalidArgumentException("Please mount a volume for the directory /app/downloads");
+            } else {
+                App::cache_set('output_dir', rootpath('downloads'));
+            }
+        } else {
+            $dir = App::args()->getOpt('output', getcwd());
+            if (!is_dir($dir)) {
+                throw new InvalidArgumentException("No such directory: $dir");
+            } else {
+                App::cache_set('output_dir', realpath(normalize($dir)));
+            }
+        }
+
+
         // disable pcre jit because we are dealing with big chunks of text
         ini_set("pcre.jit", '0');// TODO: check if required (test big response)
         ini_set("pcre.backtrack_limit", '20000000');

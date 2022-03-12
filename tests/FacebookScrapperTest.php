@@ -9,10 +9,9 @@ final class FacebookScrapperTest extends TestCase
     {
         $fname = getcwd() . DIRECTORY_SEPARATOR . "test_" . time() . "mp4";
         App::run([
-            "", "--out", $fname, "https://www.facebook.com/zuck/videos/4884691704896320"
+            "", "-o", $fname, "https://www.facebook.com/zuck/videos/4884691704896320"
         ]);
-        $this->assertFileExists($fname);
-        $this->assertGreaterThan(bytes('1MB'), filesize($fname));
+        $this->assertGreaterThan(bytes('1MB'), @filesize($fname));
     }
 
     public function testCanScrapImageSource(): void

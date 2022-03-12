@@ -23,7 +23,7 @@ trait ReadsArguments
     {
         $cli = Cli::create()
             ->description("Download media from a post url")
-            ->opt("out:o", "set output path, default is current working directory(\$pwd)")
+            ->opt("output:o", "set output directory, default is current working directory")
             ->opt("verbose:v", "display more useful information", false, 'bool')
             ->opt("version", "show version", false, 'bool')
             ->opt('header:h', "Add a header to the request (like Cookie), can be repeated", false, "string[]")

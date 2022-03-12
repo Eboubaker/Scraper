@@ -1,25 +1,32 @@
-FROM ubuntu:20.04
+FROM php:7.4-zts
 
 LABEL version=0.0.1
-MAINTAINER "Eboubaker Bekkouche"
+LABEL maintainer="Eboubaker Bekkouche"
 
-ENV DEBIAN_FRONTEND noninteractive
-ENV TZ=UTC
+# Tell scrapper to always output to downloads directory, which the user should mount it as a volume
+ENV SCRAPPER_DOCKERIZED=1
 
-RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
-RUN apt-get update
-RUN apt-get install -y gnupg curl ca-certificates zip unzip git libcap2-bin
-RUN mkdir -p ~/.gnupg
-RUN echo "disable-ipv6" >> ~/.gnupg/dirmngr.conf
-RUN apt-key adv --homedir ~/.gnupg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys E5267A6C
-RUN apt-key adv --homedir ~/.gnupg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C300EE8C
-RUN echo "deb http://ppa.launchpad.net/ondrej/php/ubuntu focal main" > /etc/apt/sources.list.d/ppa_ondrej_php.list
-RUN apt-get update
-RUN apt-get install -y php7.4-cli php7.4-mbstring php7.4-curl php7.4-json php7.4-dom
-RUN php -r "readfile('http://getcomposer.org/installer');" | php -- --install-dir=/usr/bin/ --filename=composer
+RUN apt update && \
+    apt install -y software-properties-common && \
+    apt update && \
+    add-apt-repository ppa:jonathonf/ffmpeg-4 && \
+    apt install -y ffmpeg
+RUN apt install -y git unzip
+RUN mv /usr/local/etc/php/php.ini-development /usr/local/etc/php/php.ini
+RUN pear config-set php_ini /usr/local/etc/php/php.ini
+RUN pecl install parallel
+RUN docker-php-ext-install opcache
 
-COPY . /app
+RUN php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');" && \
+    php composer-setup.php && \
+    php -r "unlink('composer-setup.php');" && \
+    mv composer.phar /usr/local/bin/composer
+
 WORKDIR /app
+COPY composer* /app/
+COPY src /app/src
+COPY LICENSE.txt /app/
+RUN composer install --no-dev
 
-RUN composer install
+RUN rm -rf /tmp/**
 ENTRYPOINT ["php", "src/scrap.php"]

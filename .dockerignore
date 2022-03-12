@@ -1,0 +1,10 @@
+/vendor
+/.git
+/.idea
+/logs
+/releases
+/DEV_NOTES
+.phpunit.result.cache
+/downloads/
+/**/*.cache
+/bin

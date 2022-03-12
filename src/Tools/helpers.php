@@ -151,13 +151,17 @@ function debug_enabled(): bool
  */
 function rootpath(string $append = ''): string
 {
-    $dir = dirname(Phar::running(false));
-    if (!$dir) {
-        $dir = realpath('.');
-        $tries = 5;
-        while (!file_exists(normalize($dir . '/vendor')) && --$tries != 0)
-            $dir = dirname($dir);
-        if ($tries == 0) throw new Error("root path not resolved");
+    if (!($dir = App::cache_get('internals.rootpath'))) {
+        $dir = dirname(Phar::running(false));
+        if (!$dir) {
+            $dir = realpath(__DIR__);
+            $tries = 5;
+            // the root is where vendor sits
+            while (!file_exists(normalize($dir . '/vendor')) && --$tries != 0)
+                $dir = dirname($dir);
+            if ($tries == 0) throw new Error("root path not resolved");
+        }
+        App::cache_set('internals.rootpath', $dir);
     }
     $append = normalize($append);
     return $dir . putif($append !== '', DIRECTORY_SEPARATOR . $append);

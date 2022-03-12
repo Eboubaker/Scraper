@@ -1,7 +1,20 @@
 <?php /** @noinspection PhpUnnecessaryFullyQualifiedNameInspection,PhpFullyQualifiedNameUsageInspection */
 
-const TTY_UP = "\x1b[A";
+use Eboubaker\Scrapper\App;
+
+const TTY_UP = "\33[A";// https://www.vt100.net/docs/vt100-ug/chapter3.html#CUU
 const TTY_FLUSH = "\33[2K\r";
+
+/**
+ * local write line, register the wrote line
+ */
+function lwritel(string $line)
+{
+    fwrite(STDOUT, $line . PHP_EOL);
+    if (App::bootstrapped()) {
+        App::cache_set('stdout_wrote_lines', App::cache_get('stdout_wrote_lines', 0) + 1);
+    }
+}
 
 /**
  * @author Eboubakkar Bekkouche <eboubakkar@gmail.com>
@@ -13,33 +26,33 @@ function format(string $text, ...$args): string
 
 function info(string $msg, ...$args)
 {
-    echo style("[INFO] ", "cyan,bold") . format($msg, ...$args) . "\n";
+    lwritel(style("[INFO] ", "cyan,bold") . format($msg, ...$args));
 }
 
 function tell(string $msg, ...$args)
 {
-    echo format($msg, ...$args) . "\n";
+    lwritel(format($msg, ...$args));
 }
 
 function notice(string $msg, ...$args)
 {
-    echo style("[NOTICE] ", "red,yellow,bold") . format($msg, ...$args) . "\n";
+    lwritel(style("[NOTICE] ", "red,yellow,bold") . format($msg, ...$args));
 }
 
 function error(string $msg, ...$args)
 {
-    echo style("[ERROR] ", "red,bold") . format($msg, ...$args) . "\n";
+    lwritel(style("[ERROR] ", "red,bold") . format($msg, ...$args));
 }
 
 function warn(string $msg, ...$args)
 {
-    echo style("[WARN] ", "yellow,bold") . format($msg, ...$args) . "\n";
+    lwritel(style("[WARN] ", "yellow,bold") . format($msg, ...$args));
 }
 
 function debug(string $msg, ...$args)
 {
     if (!debug_enabled()) return;
-    echo style("[DEBUG] ", "blue,bold") . format($msg, ...$args) . "\n";
+    lwritel(style("[DEBUG] ", "blue,bold") . format($msg, ...$args));
 }
 
 

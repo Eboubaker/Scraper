@@ -2,17 +2,27 @@
 ini_set('display_errors', '1');
 ini_set('display_startup_errors', '1');
 error_reporting(E_ALL);
+const EXCLUDED = [
+    ".git",
+    ".idea",
+    "releases",
+    "make_release.php",
+    "update_version.sh"
+];
+
 /**
  * This script helps me to produce a winx86 & linux release zip files and push them to github.
  * Usage Example: `$ php make_release.php v0.0.1`
  * @author Eboubaker Bekkouche <eboubakkar@gmail.com>
  */
-
 function main(array $argv): int
 {
-
     if (count($argv) === 1) {
-        fwrite(STDERR, "Provide a release name" . PHP_EOL);
+        fwrite(STDERR, "Provide a release name/tag" . PHP_EOL);
+        return 1;
+    }
+    if (count($argv) > 2) {
+        fwrite(STDERR, "Expected exactly 1 argument" . PHP_EOL);
         return 1;
     }
     // release name
@@ -20,10 +30,24 @@ function main(array $argv): int
     if ($rname[0] !== 'v')
         $rname = 'v' . $rname;
     echo "Making : $rname" . PHP_EOL;
-
+    echo "optimizing autoloader" . PHP_EOL;
+    system("composer install --no-dev");
+    system("composer dumpa");
     try {
-        $win_target = make_release("winx86", $rname);
-        $linux_target = make_release("linux", $rname);
+        // filter unwanted entries using git
+        $entries = array_diff(scandir('.'), ['.', '..']);
+        $entries = array_filter($entries, function ($entry) {
+            if ($entry === "vendor") return true;
+            if (in_array($entry, EXCLUDED)) return false;
+            exec("git check-ignore " . $entry, $o, $code);
+            // check-ignore returns 1 if the path is not ignored
+            if ($code === 1) return true;
+            return false;
+        });
+
+        $winx64_target = make_release("standalone-winx64", $rname, $entries);
+        $winx86_target = make_release("standalone-winx86", $rname, $entries);
+        $linux_target = make_release("linux", $rname, $entries);
 
         echo "Are you sure you want to push these assets to github?(yes/no): ";
         $handle = fopen("php://stdin", "r");
@@ -37,12 +61,12 @@ function main(array $argv): int
 
         // use github cli to create release, generate notes and upload the zip release.
         echo "Pushing: $rname\r\n";
-        system("gh release create $rname --generate-notes " . quote($win_target) . " " . quote($linux_target), $code);
+        system("gh release create " . quote($rname) . " --generate-notes " . quote($winx86_target) . " " . quote($linux_target) . " " . quote($winx64_target), $code);
         if ($code !== 0) {
             throw new Exception("Failed to create release with githubCLI");
         }
-//        @unlink($win_target);
-//        @unlink($linux_target);
+        @unlink($winx86_target);
+        @unlink($linux_target);
     } catch (Exception $e) {
         fwrite(STDERR, "Error: " . $e->getMessage() . PHP_EOL);
         return 1;
@@ -55,8 +79,9 @@ function main(array $argv): int
  * @return string path to zip file.
  * @throws Exception
  */
-function make_release(string $name, string $rname): string
+function make_release(string $name, string $rname, array $entries): string
 {
+    echo "Generating release : $name" . PHP_EOL;
     $release_container = normalize(dirname(__FILE__), "/releases/scrapper-$name-$rname");
     $release_app_src = normalize("$release_container/scrapper");
     $release_zip_output = normalize(dirname(__FILE__), "/releases/scrapper-$name-$rname.zip");
@@ -72,22 +97,6 @@ function make_release(string $name, string $rname): string
 
     // try make release or remove the create release folder
     try {
-        // filter unwanted entries using git
-        $entries = array_diff(scandir('.'), ['.', '..']);
-        $entries = array_filter($entries, function ($entry) {
-            if ($entry === "vendor") return true;
-            if (in_array($entry, [
-                ".git",
-                ".idea",
-                "releases",
-                "make_release.php",
-            ])) return false;
-            exec("git check-ignore " . $entry, $o, $code);
-            // check-ignore returns 1 if the path is not ignored
-            if ($code === 1) return true;
-            return false;
-        });
-
         // copy current version to release.
         foreach ($entries as $entry) {
             if (!copyfs(realpath($entry), normalize($release_app_src, basename($entry)))) {
@@ -132,7 +141,6 @@ function quote(string $str): string
 
 /**
  * copy file system entry (recursively)
- * https://stackoverflow.com/a/19356365/10387008
  */
 function copyfs($source, $dest): bool
 {

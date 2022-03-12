@@ -1,2 +1,2 @@
-/scrapper-v*
-/*.zip
+*
+!.gitignore

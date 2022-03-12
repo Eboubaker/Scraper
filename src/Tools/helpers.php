@@ -8,7 +8,7 @@ const TTY_FLUSH = "\33[2K\r";
  */
 function format(string $text, ...$args): string
 {
-    return sprintf(str_replace("{}", "%s", $text), ...$args);
+    return sprintf(str_replace("{}", "%s", str_replace("%", "%%", $text)), ...$args);
 }
 
 function info(string $msg, ...$args)

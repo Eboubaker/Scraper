@@ -140,8 +140,8 @@ function putif($condition, $value, $else = '')
 function debug_enabled(): bool
 {
     // TODO: optimize
-    if (!\Eboubaker\Scrapper\App::bootstrapped()) return true;
-    return boolval(\Eboubaker\Scrapper\App::args()->getOpt('verbose'));
+    if (!App::bootstrapped()) return false;
+    return boolval(App::args()->getOpt('verbose'));
 }
 
 /**

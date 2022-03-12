@@ -400,71 +400,27 @@ function filter_filename($name): string
         ) . ($ext ? '.' . $ext : '');
 }
 
-/**
- * find all json objects/arrays in an html document.
- *
- * @param string $html
- * @return array an associative array of all found objects(nested objects ar also associative arrays)
- * @author Eboubaker Bekkouche <eboubakkar@gmail.com>
- */
-function collect_all_json(string $html): array
-{
-    $regex_valid_json = <<<'EOF'
-    /
-    (?(DEFINE)
-     (?<number>   -? (?= [1-9]|0(?!\d) ) \d+ (\.\d+)? ([eE] [+-]? \d+)? )
-     (?<boolean>   true | false | null )
-     (?<string>    " ([^"\n\r\t\\\\]* | \\ ["\\\\bfnrt\/] | \\ u [0-9a-f]{4} )* " )
-     (?<array>     \[  (?:  (?&json)  (?: , (?&json)  )*  )?  \s* \] )
-     (?<pair>      \s* (?&string) \s* : (?&json)  )
-     (?<object>    \{  (?:  (?&pair)  (?: , (?&pair)  )*  )?  \s* \} )
-     (?<json>   \s* (?: (?&number) | (?&boolean) | (?&string) | (?&array) | (?&object) ) \s* )
-     (?<realobject>    \{  (?:  (?&pair)  (?: , (?&pair)  )*  )  \s* \} )
-     (?<realarray>     \[  (?:  (?&json)  (?: , (?&json)  )*  )  \s* \] )
-     (?<realjson>   \s* (?: (?&realarray) | (?&realobject) ) \s* )
-    )
-    (?&realjson)
-    /six
-    EOF;
-
-    $data_bag = collect((new \Symfony\Component\DomCrawler\Crawler($html))
-        // find script tags
-        ->filter("script")
-        // find all json inside the scripts
-        ->each(function (\Symfony\Component\DomCrawler\Crawler $node) use ($regex_valid_json) {
-            if (isset($F)) unset($F);
-            preg_match_all($regex_valid_json, $node->text(null, false), $F, PREG_UNMATCHED_AS_NULL);
-            if (preg_last_error() !== PREG_NO_ERROR) error(preg_last_error_msg());
-            return $F;
-        }))
-        ->flatten()
-        // remove preg_match empty groups garbage
-        ->filter(fn($j) => $j && strlen($j))
-        ->map(fn($obj) => json_decode($obj, true))
-        ->filter(function (array $arr) {
-            // keep arrays that contains at least one string key
-            return collect($arr)->filter(fn($v, $k) => is_string($k))
-                ->count();
-        })
-        ->values()
-        ->all();
-    return $data_bag;
-}
-
-
 function make_ffmpeg(): ?\FFMpeg\FFMpeg
 {
     try {
-        if (\Eboubaker\Scrapper\App::cache_has('ffmpeg')) return \Eboubaker\Scrapper\App::cache_get('ffmpeg');
-        $ffmpeg = \FFMpeg\FFMpeg::create(host_is_windows_machine() ? [
-            "ffmpeg.binaries" => rootpath("bin/ffmpeg/ffmpeg.exe"),
-            "ffprobe.binaries" => rootpath("bin/ffmpeg/ffprobe.exe"),
-        ] : []);
-        \Eboubaker\Scrapper\App::cache_set('ffmpeg', $ffmpeg);
+        if (App::cache_has('ffmpeg')) return App::cache_get('ffmpeg');
+        if (host_is_windows_machine()) {
+            $ffmpeg = \FFMpeg\FFMpeg::create();
+        } else {
+            try {
+                $ffmpeg = \FFMpeg\FFMpeg::create();
+            } catch (Throwable $e) {
+                // try get from release
+                $ffmpeg = \FFMpeg\FFMpeg::create([
+                    "ffmpeg.binaries" => rootpath("bin/ffmpeg/ffmpeg.exe"),
+                    "ffprobe.binaries" => rootpath("bin/ffmpeg/ffprobe.exe"),
+                ]);
+            }
+        }
+        App::cache_set('ffmpeg', $ffmpeg);
         return $ffmpeg;
-    } catch (\Exception $e) {
-        debug("Error: ");
-        if (debug_enabled()) dump_exception($e);
+    } catch (\Throwable $e) {
+        make_monolog()->error("Exception:" . (new ReflectionClass($e))->getName() . ":" . $e->getMessage());
     }
     return null;
 }

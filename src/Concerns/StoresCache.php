@@ -8,9 +8,10 @@ trait StoresCache
 {
     private static array $store = [];
 
-    public static function cache_set(string $key, $value): void
+    public static function cache_set(string $key, $value)
     {
         Arr::set(self::$store, $key, $value);
+        return $value;
     }
 
     public static function cache_has(string $key): bool

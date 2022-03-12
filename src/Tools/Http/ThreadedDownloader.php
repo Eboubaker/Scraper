@@ -1,12 +1,13 @@
 <?php
 
-namespace Eboubaker\Scrapper\Tools;
+namespace Eboubaker\Scrapper\Tools\Http;
 
 use ArrayAccess;
 use Closure;
 use Eboubaker\Scrapper\Concerns\ScrapperUtils;
 use Eboubaker\Scrapper\Contracts\Downloader;
 use Eboubaker\Scrapper\Exception\ExpectationFailedException;
+use Eboubaker\Scrapper\Tools\CLI\DownloadIndicator;
 use Exception;
 use GuzzleHttp\Client as HttpClient;
 use GuzzleHttp\Exception\GuzzleException as HttpClientException;
@@ -16,8 +17,11 @@ use parallel\Events;
 use parallel\Events\Event\Type as EventType;
 use parallel\Future;
 use parallel\Runtime;
+use Phar;
 use Psr\Log\LoggerInterface;
+use ReflectionClass;
 use Throwable;
+use Tightenco\Collect\Support\Collection;
 
 /**
  * fast download a resource url by chunking it to multiple parts for multiple threads
@@ -29,18 +33,19 @@ final class ThreadedDownloader implements Downloader
     private int $workers_count;
     private int $resource_size;
     private LoggerInterface $log;
+    private array $append_headers = [];
 
     /**
      * @throws ExpectationFailedException
      * @throws Throwable
      * @throws HttpClientException
      */
-    public function __construct(string $resource_url, int $workers_count = 8)
+    public function __construct(string $resource_url, int $workers_count = 32)
     {
         $this->resource_url = $resource_url;
         $this->workers_count = $workers_count;
-        $this->resource_size = $this->get_resource_size();
         $this->log = make_monolog('ThreadedDownloader');
+        $this->resource_size = $this->get_resource_size();
     }
 
     /**
@@ -59,7 +64,7 @@ final class ThreadedDownloader implements Downloader
             $response = $client->get($this->resource_url, [
                 ReqOpt::HEADERS => ScrapperUtils::make_curl_headers() + [
                         "Range" => "bytes=10-20"
-                    ],
+                    ] + $this->append_headers,
                 ReqOpt::STREAM => true,
             ]);
             if ((int)data_get($response->getHeader('Content-Length'), 0) !== 11) {
@@ -87,42 +92,46 @@ final class ThreadedDownloader implements Downloader
      */
     public function saveto(string $file_name): string
     {
-        $totalDownloaded = 0;
         $chunkSize = (int)($this->resource_size / $this->workers_count);
         $workers_link = Channel::make('workers_link', Channel::Infinite);
         $tracker_link = Channel::make('health_link', Channel::Infinite);
-        $tasks = collect([]);
-        $makeRuntime = fn() => new Runtime(rootpath('/vendor/autoload.php'));
-        info("using $this->workers_count workers");
-        $tracker = $makeRuntime()->run($this->make_tracker_func(), [
+        $workers = new Collection();
+        if (running_as_phar()) {
+            $vendor_dir = Phar::running(true) . "/vendor/autoload.php";
+        } else {
+            $vendor_dir = rootpath('/vendor/autoload.php');
+        }
+        $makeRuntime = fn() => new Runtime($vendor_dir);
+        $tracker = $makeRuntime()->run($this->make_tracker_task(), [
             "Tracker",
             $this->workers_count,
             $this->resource_size
         ]);
         for ($i = 0; $i < $this->workers_count; $i++) {
             $downloaded = 0;// TODO: put downloaded parts hash in some directory and read them later to allow resume option
-            $totalDownloaded += $downloaded;
-            $start = $i * $chunkSize;
+            $start = $i * $chunkSize + $downloaded;
             $end = $i == $this->workers_count - 1 ? $this->resource_size - 1 : $start + $chunkSize - 1;
-            $tasks[] = $makeRuntime()->run($this->make_worker_func(), [
+            $workers[] = $makeRuntime()->run($this->make_worker_task(), [
                 $i,
                 $this->resource_url,
                 $start,
                 $end,
-                ScrapperUtils::make_curl_headers(),
+                ScrapperUtils::make_curl_headers() + $this->append_headers,
                 'workers_link'
             ]);
         }
-        do {
-            usleep(500_000);
-        } while ($tasks->contains(fn(Future $future) => !$future->done()));
+        do usleep(500_000);
+        while ($workers->contains(fn(Future $task) => !$task->done()));
         if (!$tracker->done())
             usleep(2_000_000);
         $tracker_link->send(["message" => "STOP"]);
         usleep(300_000);
+        echo "\n";
+        if (!$tracker->done()) $this->log->warning("sent stop signal to tracker but it did not stop, this will probably cause an error or cause the main thread to hang");
         $workers_link->close();
+        $tracker_link->close();
         $parts = collect($tracker->value())->filter()->sort();
-        if ($parts->count() !== $tasks->count()) {
+        if ($parts->count() !== $workers->count()) {
             throw new ExpectationFailedException("not all file parts finished downloading");
         }
         $this->files_merge($parts, $file_name);
@@ -134,10 +143,10 @@ final class ThreadedDownloader implements Downloader
         return $file_name;
     }
 
-    private function make_tracker_func(): Closure
+    private function make_tracker_task(): Closure
     {
         return function ($worker_id, int $workersCount, int $total) {
-            $log = make_monolog("tracker_$worker_id");
+            $log = make_monolog("Tracker");
             $workers_link = Channel::open('workers_link');
             $tracker_link = Channel::open('health_link');
             $events = new Events();
@@ -145,28 +154,8 @@ final class ThreadedDownloader implements Downloader
             $events->addChannel($tracker_link);
             $events->setBlocking(true);
             $events->setTimeout(500_000);
-            $downloaded = 0;
-            $max_snake_len = 50;
-            $last_downloaded = 0;
-            $last_show = 0;
-            $flick_timeout = 2;//seconds
             $running = 0;
-            $delayed_progress = function ($downloaded, $running) use (&$last_show, &$last_downloaded, $flick_timeout, $max_snake_len, $total, $log) {
-                if (microtime(true) > $last_show + $flick_timeout || $total === $downloaded) {
-                    $log->debug("downloaded: $downloaded, total: $total");
-                    $perc_100 = (int)(100.0 * $downloaded / $total);
-                    $snake_len = (int)(1.0 * $max_snake_len * $downloaded / $total);
-                    fwrite(STDOUT, sprintf(TTY_FLUSH . "[%s] %d%% %s/%s (%s/s) (%s workers)" . (!stream_isatty(STDOUT) ? PHP_EOL : '')
-                        , str_pad(style(str_repeat('=', $snake_len), 'green,bold') . ">", $max_snake_len, "-", STR_PAD_RIGHT)
-                        , $perc_100
-                        , human_readable_size($downloaded)
-                        , human_readable_size($total)
-                        , human_readable_size(($downloaded - $last_downloaded) / (microtime(true) - $last_show))
-                        , $running));
-                    $last_downloaded = $downloaded;
-                    $last_show = microtime(true);
-                }
-            };
+            $indicator = new DownloadIndicator($total);
             $parts = [];
             while ($workersCount > 0) {
                 try {
@@ -175,8 +164,7 @@ final class ThreadedDownloader implements Downloader
                     if (EventType::Read === $event->type) {
                         $message = (array)$event->value;// force fail if not array
                         if ($message['event'] === 'PROGRESSING') {
-                            $downloaded += $message['data']['downloaded'];
-                            $delayed_progress($downloaded, $running);
+                            $indicator->progress($message['data']['downloaded']);
                         } else if ($message['event'] === 'STRUGGLING') $running--;
                         else if ($message['event'] === 'MAKING_NEW_ATTEMPT' || $message['event'] === 'STARTING') $running++;
                         else if ($message['event'] === 'DONE') {
@@ -187,61 +175,49 @@ final class ThreadedDownloader implements Downloader
                         } else if ($message['event'] === 'STOP') break;// message from master thread
                     } elseif (EventType::Close === $event->type) {
                         $log->debug("got close event type");
-                        return null;
+                        break;
                     }
+                    $indicator->display("($running workers)");
                 } catch (Events\Error\Timeout $e) {
                     // nothing
                 } catch (Throwable $e) {
                     $log->error($e->getMessage());
                 }
             }
-            $log->debug("found parts: " . json_encode($parts));
+            $indicator->clear();
+            $log->debug("collected parts: " . json_encode($parts));
             return $parts;
         };
     }
 
-    private function make_worker_func(): Closure
+    private function make_worker_task(): Closure
     {
         return function (int $worker_id, string $url, int $start, int $end, $append_headers, $report_channel) {
             $log = make_monolog("worker_$worker_id");
             $workers_link = Channel::open($report_channel);
-            $name = tempnam(sys_get_temp_dir(), time() . ".scrapper");
-            $out = fopen($name, 'ab+');
+            $part_path = tempnam(sys_get_temp_dir(), "scr");
+            $log->debug("will save to: $part_path");
+            $out = fopen($part_path, 'wb+');
             $attempt = 1;
             $total = $end - $start + 1;
             $log->debug("total=$total");
-            $old_downloaded = 0;
-            $on_progress = function () use ($total, $out, $workers_link, $worker_id, &$old_downloaded) {
-                $downloaded = fstat($out)['size'];
-                $workers_link->send([
-                    "worker_id" => $worker_id,
-                    "event" => "PROGRESSING",
-                    "data" => [
-                        "downloaded" => $downloaded - $old_downloaded,
-                        "total" => $total
-                    ],
-                ]);
-                $old_downloaded = $downloaded;
-            };
-            $last_show = 0;
-            $flick_timeout = 2;//seconds
-            $delayed_progress = function () use (&$last_show, $flick_timeout, $on_progress) {
-                if (microtime(true) > $last_show + $flick_timeout) {
-                    $on_progress();
-                    $last_show = microtime(true);
-                }
-            };
             $client = new HttpClient([
                 'timeout' => 10,
                 'allow_redirects' => true,
                 'verify' => false, // TODO: SSL
             ]);
             $buffer_size = bytes('64kb');
+            $total_write = 0;
             start_over:
             try {
+                $log->debug("Requesting range " . ($start + $total_write) . "-$end");
+                if ($start + $total_write >= $end) {
+                    $log->error("Range start is bigger than end", ["start" => $start, "fstat" => $total_write, "end" => $end]);
+                    return;
+                }
                 $response = $client->get($url, [
                     ReqOpt::HEADERS => [
-                            "Range" => "bytes=" . ($start + fstat($out)['size']) . "-$end"
+                            "Range" => "bytes=" . ($start + $total_write) . "-$end"
                         ] + $append_headers,
                     ReqOpt::STREAM => true,
                     'curl' => [
@@ -258,16 +234,23 @@ final class ThreadedDownloader implements Downloader
                 $log->debug("response code:" . $response->getStatusCode());
                 $log->debug("content-length:" . data_get($response->getHeader('Content-Length'), 0, 0));
                 $stream = $response->getBody();
-                while (!$stream->eof()) {
+                while ($total_write !== $total && !$stream->eof()) {
                     $read = $stream->read($buffer_size);
-                    fwrite($out, $read);
-                    $delayed_progress();
+                    $wrote = fwrite($out, $read);
+                    $total_write += $wrote;
+                    $workers_link->send([
+                        "worker_id" => $worker_id,
+                        "event" => "PROGRESSING",
+                        "data" => [
+                            "downloaded" => $wrote,
+                            "total" => $total
+                        ],
+                    ]);
                 }
-                $log->debug("done downloading with " . fstat($out)['size'] . " downloaded out of " . $total);
-                if (fstat($out)['size'] !== $total)
-                    throw new Exception("unexpected end of input");
+                if ($total_write !== $total) throw new Exception("unexpected end of input");
+                $log->debug("done downloading with $total_write downloaded out of " . $total);
             } catch (Throwable $e) {
-                $log->error($e->getMessage());
+                $log->error((new ReflectionClass($e))->getName() . ": " . $e->getMessage(), ["fstat" => fstat($out)['size'], "total" => $total, "total_write" => $total_write]);
                 $workers_link->send([
                     "worker_id" => $worker_id,
                     "event" => "STRUGGLING",
@@ -286,12 +269,12 @@ final class ThreadedDownloader implements Downloader
                 goto start_over;
             }
             fclose($out);
-            $log->info("saved part to $name");
+            $log->info("saved part to $part_path");
             $workers_link->send([
                 "worker_id" => $worker_id,
                 "event" => "DONE",
                 "data" => [
-                    "part_path" => $name
+                    "part_path" => $part_path
                 ],
             ]);
         };
@@ -317,5 +300,10 @@ final class ThreadedDownloader implements Downloader
     function get_resource_url(): string
     {
         return $this->resource_url;
+    }
+
+    public function with_headers(array $headers)
+    {
+        array_push($this->append_headers, $headers);
     }
 }

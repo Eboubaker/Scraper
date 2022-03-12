@@ -28,17 +28,31 @@ final class App
             self::bootstrap($args);
             return self::run_main();
         } catch (InvalidArgumentException $e) {
+            echo TTY_FLUSH;
             error($e->getMessage());
             if ($e->getPrevious())
                 error($e->getPrevious()->getMessage());
             tell("run with --help to see usage");
             return $e->getCode();
         } catch (UserException $e) {
-            error($e->getMessage());
+            echo TTY_FLUSH;
+            if ($e->getPrevious()) {
+                $str_cause = '';
+                $current = $e->getPrevious();
+                while ($current) {
+                    $str_cause .= "\n" . style("      * Caused by", 'red,bold') . ": " . className($current) . ": " . $current->getMessage();
+                    $current = $current->getPrevious();
+                }
+                error(className($e) . ": " . $e->getMessage() . $str_cause);
+            } else {
+                error($e->getMessage());
+            }
             return $e->getCode();
         } catch (Exception $e) {
+            echo TTY_FLUSH;
             // display nice error message to console, or maybe bad??
-            dump_exception($e);
+            if (debug_enabled()) dump_exception($e);
+            error($e->getMessage());
             return $e->getCode() !== 0 ? $e->getCode() : 100;
         }
     }

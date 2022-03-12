@@ -174,6 +174,19 @@ function normalize(string $path): string
 }
 
 /**
+ * @param $object
+ * @return string|null
+ */
+function className($object): ?string
+{
+    try {
+        return (new ReflectionClass($object))->getShortName();
+    } catch (\Throwable $e) {
+        return null;
+    }
+}
+
+/**
  * get the current working directory path
  * @author Eboubakkar Bekkouche <eboubakkar@gmail.com>
  */

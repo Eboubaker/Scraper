@@ -117,14 +117,45 @@ final class App
         if (empty($url)) {
             throw new InvalidArgumentException("url was not provided");
         }
-
-        list($html_document, $final_url) = ScrapperUtils::load_webpage($url);
-
+        info("Downloading webpage: {}", $url);
+        $document = Document::fromUrl($url);
+        if ($url !== $document->getFinalUrl())
+            notice("Final url was changed: {}", $document->getFinalUrl() ?? style("NULL", 'red'));
         info("attempting to determine which extractor to use");
-        $scrapper = ScrapperUtils::getRequiredScrapper($final_url, $html_document);
-        info("using {}", (new \ReflectionClass($scrapper))->getShortName());
-
-        $scrapper->download_media_from_html_document($final_url, $html_document);
+        /** @var $scrapper Scrapper */
+        $scrapper = null;
+        /** @var $loaded array<int, Scrapper> */
+        $loaded = [
+            FacebookScrapper::class,
+            YoutubeScrapper::class,
+            RedditScrapper::class
+        ];
+        foreach ($loaded as $klass) {
+            if ($klass::can_scrap($document)) {
+                $scrapper = new $klass;
+                $cname = explode("\\", $klass);
+                info("using " . end($cname));
+                break;
+            }
+        }
+        if (!$scrapper) {
+            // TODO: add pr request link for new scrapper
+            warn("{} is probably not supported", $document->getFinalUrl());
+            // TODO: add how to do login when it is implemented
+            notice("if the post url is private you might need to login first");
+            throw new UrlNotSupportedException("Could not determine which extractor to use");
+        } else {
+            $out = $scrapper->download_media_from_html_document($document);
+            if (stream_isatty(STDOUT)) {
+                fwrite(STDOUT, "\33[" . App::cache_get('stdout_wrote_lines') . "A\33[J");
+            }
+            if (getenv("SCRAPPER_DOCKERIZED")) {
+                tell("Saved as : " . basename($out));
+            } else {
+                tell("Saved as : $out");
+            }
+            if (!host_is_windows_machine()) echo PHP_EOL;
+        }
         return 0;
     }
 
@@ -147,6 +178,6 @@ final class App
 
     public static function bootstrapped(): bool
     {
-        return self::$bootstrapped;
+        return !!self::$bootstrapped;
     }
 }

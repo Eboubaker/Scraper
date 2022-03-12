@@ -13,15 +13,18 @@ class FacebookScrapper implements Scrapper
 {
     use ScrapperUtils;
 
-    public static function can_scrap(string $final_url, ?string $html_document): bool
+    public static function can_scrap(Document $document): bool
     {
-        return !!preg_match("/https?:\/\/((web|m|www)\.)?facebook\.com\//", $final_url);
+        return !!preg_match("/https?:\/\/(.+\.)?facebook\.com\//", $document->getFinalUrl());
     }
 
     /**
      * @throws WebPageNotLoadedException
+     * @throws DownloadFailedException
+     * @throws ExpectationFailedException
+     * @throws Throwable
      */
-    function download_media_from_html_document(string $final_url, string $html_document): string
+    function download_media_from_html_document(Document $document): string
     {
         if (preg_match("/\/login\/\?next=/", $final_url)) {
             throw new WebPageNotLoadedException("Facebook redirected you to the login page, This post might be private, try logging in first");

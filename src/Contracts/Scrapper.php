@@ -2,7 +2,10 @@
 
 namespace Eboubaker\Scrapper\Contracts;
 
+use Eboubaker\Scrapper\Tools\Http\Document;
+
 /**
+ * all scrappers shall implement this contract
  * @author Eboubaker Bekkouche <eboubakkar@gmail.com>
  */
 interface Scrapper
@@ -10,7 +13,7 @@ interface Scrapper
     /**
      * download the media in the document, should return the filename
      */
-    public function download_media_from_html_document(string $final_url, string $html_document): string;
+    public function download_media_from_html_document(Document $document): string;
 
 
     /**
@@ -18,5 +21,5 @@ interface Scrapper
      * The function should return a boolean and should not raise any exceptions and should not produce any side effects.
      */
     // #[\JetBrains\PhpStorm\Pure]
-    public static function can_scrap(string $final_url, ?string $html_document): bool;
+    public static function can_scrap(Document $document): bool;
 }

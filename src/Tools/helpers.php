@@ -221,10 +221,19 @@ function download_static_media_url(string $url, string $filename): string
 /**
  * @author Eboubakkar Bekkouche <eboubakkar@gmail.com>
  */
-function logfile(?string $name = 'scrapper.log')
+function logfile(?string $name = 'scrapper.log', bool $create_paths = false)
 {
     if ($name == null) $name = 'scrapper.log';
-    return rootpath('logs/' . $name);
+    $p = rootpath('logs/' . $name);
+    $parts = explode(DIRECTORY_SEPARATOR, $p);
+    if ($create_paths && count($parts) > 1) {
+        $parts = implode(DIRECTORY_SEPARATOR, array_slice($parts, 0, -1));
+        if (!file_exists($parts)) {
+            // TODO: is this right? (600) will it cause permission issues?
+            mkdir($parts, 0600, true);
+        }
+    }
+    return $p;
 }
 
 function setClipboard(string $new): bool

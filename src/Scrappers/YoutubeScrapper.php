@@ -108,7 +108,7 @@ final class YoutubeScrapper implements Scrapper
                     info("Downloaded Audio {}", style($this->str_video_quality($video), 'blue'));
                 }
                 $this->log->info("Saved audio part in $audio_file");
-                info("Merging Video with Audio(used highest encoding for best quality)...");
+                info("Merging Video with Audio");
                 try {
                     $indicator = new ProgressIndicator("FFmpeg");
                     $this->merge_video_with_audio($video_file, $audio_file, $fname, fn($percentage) => $indicator->update($percentage / 100.0));

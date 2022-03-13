@@ -417,7 +417,7 @@ function make_ffmpeg(): ?\FFMpeg\FFMpeg
 {
     try {
         if (App::cache_has('ffmpeg')) return App::cache_get('ffmpeg');
-        if (host_is_windows_machine()) {
+        if (!host_is_windows_machine()) {
             $ffmpeg = \FFMpeg\FFMpeg::create();
         } else {
             try {

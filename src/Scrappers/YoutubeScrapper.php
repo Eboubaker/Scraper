@@ -232,6 +232,7 @@ final class YoutubeScrapper implements Scrapper
      */
     private function decode_cipher(string $player_src, string $cipher): string
     {
+        // TODO: The function does not always succeed in deciphering the code, needs investigation....
         // get object and function definitions from player src
         {
             $decipher_func_pattern = "/{[a-zA-Z]+=[a-zA-Z]+\\.split\\(\"\"\\);[a-zA-Z0-9$]{2}\\.[a-zA-Z0-9$]{2}.*?[a-zA-Z]+\\.join\\(\"\"\\)};/s";

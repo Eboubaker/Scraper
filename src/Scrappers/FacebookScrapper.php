@@ -51,11 +51,11 @@ final class FacebookScrapper implements Scrapper
             $url = data_get($data_bag, array_search_match($data_bag, [
                     "id" => "/$matches[video_id]/",
                     "playable_url_quality_hd"
-                ]) . ".playable_url_quality_hd",
-                fn() => data_get($data_bag, array_search_match($data_bag, [
-                        "id" => "/$matches[video_id]/",
-                        "playable_url"
-                    ]) . ".playable_url"));
+                ]) . ".playable_url_quality_hd");
+            if (!$url) $url = data_get($data_bag, array_search_match($data_bag, [
+                    "id" => "/$matches[video_id]/",
+                    "playable_url"
+                ]) . ".playable_url");
             $downloader = new ThreadedDownloader($url, 32);
             $fname = normalize(App::cache_get('output_dir') . "/" . putif($owner, "$owner ") . $matches['video_id'] . ".mp4");
             return $downloader->saveto($fname);
@@ -66,7 +66,8 @@ final class FacebookScrapper implements Scrapper
             $owner = data_get($data_bag, array_search_match($data_bag, [
                     "id" => "/$matches[image_id]/",
                     "owner.name"
-                ]) . ".owner.name", fn() => data_get($matches, 'poster'));
+                ]) . ".owner.name");
+            if (!$owner) $owner = data_get($matches, 'poster');
             info("Downloading Image $matches[image_id]" . putif($owner, " from $owner"));
             $url = data_get($data_bag, array_search_match($data_bag, [
                     "id" => "/$matches[image_id]/",

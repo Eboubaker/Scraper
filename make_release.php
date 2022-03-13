@@ -45,9 +45,12 @@ function main(array $argv): int
             return false;
         });
 
-        $winx64_target = make_release("standalone-winx64", $rname, $entries);
-        $winx86_target = make_release("standalone-winx86", $rname, $entries);
-        $linux_target = make_release("linux", $rname, $entries);
+        $winx64_target = make_release("standalone-winx64", $rname, $entries + ["bin"]);
+        $box_conf = json_decode(file_get_contents("box.json"), true);
+        system("box compile");
+        if (!file_exists($box_conf["output"])) throw new Exception("phar not found");
+//        $winx86_target = make_release("standalone-winx86", $rname, $entries);
+//        $linux_target = make_release("linux", $rname, $entries);
 
         echo "Are you sure you want to push these assets to github?(yes/no): ";
         $handle = fopen("php://stdin", "r");
@@ -61,12 +64,14 @@ function main(array $argv): int
 
         // use github cli to create release, generate notes and upload the zip release.
         echo "Pushing: $rname\r\n";
-        system("gh release create " . quote($rname) . " --generate-notes " . quote($winx86_target) . " " . quote($linux_target) . " " . quote($winx64_target), $code);
+        system("gh release create " . quote($rname) . " --generate-notes " . quote($box_conf["output"]) . " " . quote($winx64_target), $code);
         if ($code !== 0) {
             throw new Exception("Failed to create release with githubCLI");
         }
-        @unlink($winx86_target);
-        @unlink($linux_target);
+//        @unlink($winx86_target);
+//        @unlink($linux_target);
+        @unlink($box_conf["output"]);
+        @unlink($winx64_target);
     } catch (Exception $e) {
         fwrite(STDERR, "Error: " . $e->getMessage() . PHP_EOL);
         return 1;

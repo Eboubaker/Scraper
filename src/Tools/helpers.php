@@ -413,21 +413,21 @@ function filter_filename($name): string
         ) . ($ext ? '.' . $ext : '');
 }
 
-function make_ffmpeg(): ?\FFMpeg\FFMpeg
+function make_ffmpeg(array $config = []): ?\FFMpeg\FFMpeg
 {
     try {
         if (App::cache_has('ffmpeg')) return App::cache_get('ffmpeg');
         if (!host_is_windows_machine()) {
-            $ffmpeg = \FFMpeg\FFMpeg::create();
+            $ffmpeg = \FFMpeg\FFMpeg::create($config);
         } else {
             try {
-                $ffmpeg = \FFMpeg\FFMpeg::create();
+                $ffmpeg = \FFMpeg\FFMpeg::create($config);
             } catch (Throwable $e) {
                 // try get from release
                 $ffmpeg = \FFMpeg\FFMpeg::create([
-                    "ffmpeg.binaries" => rootpath("bin/ffmpeg/ffmpeg.exe"),
-                    "ffprobe.binaries" => rootpath("bin/ffmpeg/ffprobe.exe"),
-                ]);
+                        "ffmpeg.binaries" => rootpath("bin/ffmpeg/ffmpeg.exe"),
+                        "ffprobe.binaries" => rootpath("bin/ffmpeg/ffprobe.exe"),
+                    ] + $config);
             }
         }
         App::cache_set('ffmpeg', $ffmpeg);

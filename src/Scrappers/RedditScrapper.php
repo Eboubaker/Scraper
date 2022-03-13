@@ -22,7 +22,7 @@ final class RedditScrapper implements Scrapper
     /**
      * @throws NotImplementedException
      */
-    function download_media_from_html_document(Document $document): string
+    function scrap(Document $document): string
     {
         throw new NotImplementedException("Reddit scrapper will be implemented soon.");
     }

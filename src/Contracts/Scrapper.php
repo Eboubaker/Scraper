@@ -13,7 +13,7 @@ interface Scrapper
     /**
      * download the media in the document, should return the filename
      */
-    public function download_media_from_html_document(Document $document): string;
+    public function scrap(Document $document): string;
 
 
     /**

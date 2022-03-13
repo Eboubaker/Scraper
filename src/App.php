@@ -3,12 +3,16 @@
 namespace Eboubaker\Scrapper;
 
 use Eboubaker\Scrapper\Concerns\ReadsArguments;
-use Eboubaker\Scrapper\Concerns\ScrapperUtils;
 use Eboubaker\Scrapper\Concerns\StoresCache;
+use Eboubaker\Scrapper\Contracts\Scrapper;
 use Eboubaker\Scrapper\Exception\InvalidArgumentException;
 use Eboubaker\Scrapper\Exception\RequirementFailedException;
 use Eboubaker\Scrapper\Exception\UrlNotSupportedException;
 use Eboubaker\Scrapper\Exception\UserException;
+use Eboubaker\Scrapper\Scrappers\FacebookScrapper;
+use Eboubaker\Scrapper\Scrappers\RedditScrapper;
+use Eboubaker\Scrapper\Scrappers\YoutubeScrapper;
+use Eboubaker\Scrapper\Tools\Http\Document;
 use ErrorException;
 use Exception;
 
@@ -82,7 +86,7 @@ final class App
 
         if (getenv("SCRAPPER_DOCKERIZED")) {
             if (!is_dir(rootpath('downloads'))) {
-                notice("The app is running in docker, You need to mount a volume so downloads can be saved: \ndocker run -it -v PATH_TO_DOWNLOADS:/app/downloads eboubaker/scrapper ...");
+                notice("The app is running in docker, You need to mount a volume so downloads can be saved: \ndocker run -it -v /your/output/directory:/app/downloads eboubaker/scrapper ...");
                 throw new InvalidArgumentException("Please mount a volume for the directory /app/downloads");
             } else {
                 App::cache_set('output_dir', rootpath('downloads'));
@@ -124,13 +128,13 @@ final class App
         info("attempting to determine which extractor to use");
         /** @var $scrapper Scrapper */
         $scrapper = null;
-        /** @var $loaded array<int, Scrapper> */
-        $loaded = [
+        /** @var $availableScrappers array<int, Scrapper> */
+        $availableScrappers = [
             FacebookScrapper::class,
             YoutubeScrapper::class,
             RedditScrapper::class
         ];
-        foreach ($loaded as $klass) {
+        foreach ($availableScrappers as $klass) {
             if ($klass::can_scrap($document)) {
                 $scrapper = new $klass;
                 $cname = explode("\\", $klass);
@@ -145,7 +149,7 @@ final class App
             notice("if the post url is private you might need to login first");
             throw new UrlNotSupportedException("Could not determine which extractor to use");
         } else {
-            $out = $scrapper->download_media_from_html_document($document);
+            $out = $scrapper->scrap($document);
             if (stream_isatty(STDOUT)) {
                 fwrite(STDOUT, "\33[" . App::cache_get('stdout_wrote_lines') . "A\33[J");
             }

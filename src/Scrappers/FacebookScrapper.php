@@ -30,7 +30,7 @@ final class FacebookScrapper implements Scrapper
      * @throws ExpectationFailedException
      * @throws Throwable
      */
-    function download_media_from_html_document(Document $document): string
+    function scrap(Document $document): string
     {
         if ($document->getContentLength() < bytes('300kb')) {
             notice("Response size is too small: {}", style(human_readable_size($document->getContentLength()), 'red'));
@@ -49,13 +49,13 @@ final class FacebookScrapper implements Scrapper
                 ]) . ".owner.name", fn() => data_get($matches, 'poster'));
             info("Downloading Video $matches[video_id]" . putif($owner, " from $owner"));
             $url = data_get($data_bag, array_search_match($data_bag, [
-                        "id" => "/$matches[video_id]/",
-                        "playable_url_quality_hd"
-                    ]) . ".playable_url_quality_hd")
-                ?? data_get($data_bag, array_search_match($data_bag, [
+                    "id" => "/$matches[video_id]/",
+                    "playable_url_quality_hd"
+                ]) . ".playable_url_quality_hd",
+                fn() => data_get($data_bag, array_search_match($data_bag, [
                         "id" => "/$matches[video_id]/",
                         "playable_url"
-                    ]) . ".playable_url");
+                    ]) . ".playable_url"));
             $downloader = new ThreadedDownloader($url, 32);
             $fname = normalize(App::cache_get('output_dir') . "/" . putif($owner, "$owner ") . $matches['video_id'] . ".mp4");
             return $downloader->saveto($fname);

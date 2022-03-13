@@ -3,6 +3,7 @@
 namespace Eboubaker\Scrapper\Concerns;
 
 use Eboubaker\Scrapper\App;
+use Eboubaker\Scrapper\Extensions\FFMpeg\X264;
 use Exception;
 use FFMpeg\Media\Video;
 use Psr\Log\LoggerInterface;
@@ -33,8 +34,9 @@ trait ScrapperUtils
         /** @var $vid Video */
         $vid = $ffmpeg->open($video_source);
         $vid->addFilter(new \FFMpeg\Filters\Audio\SimpleFilter(array('-i', $audio_source, '-shortest')));
-        $format = new \FFMpeg\Format\Video\X264();
-        $format->setPasses(1);
+        $format = new X264();
+        $format->setVideoCodec('copy');
+        $format->setKiloBitrate(0);
         if ($on_progress) {
             $format->on('progress', fn($video, $format, $percentage) => $on_progress($percentage, $video, $format));
         }

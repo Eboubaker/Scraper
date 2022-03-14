@@ -198,7 +198,7 @@ final class YoutubeScrapper implements Scrapper
                 array_preg_find_key_paths($data_bag, "/^PLAYER_JS_URL$/", $matches);
                 $player_src_url = "https://www.youtube.com" . data_get($data_bag, implode('.', $matches[0]));
                 $client = new HttpClient([
-                    'timeout' => 8,
+                    'timeout' => 60,
                     'allow_redirects' => true,
                     'verify' => false, // TODO: SSL
                 ]);

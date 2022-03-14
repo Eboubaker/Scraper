@@ -53,10 +53,6 @@ final class YoutubeScrapper implements Scrapper
             info("Downloading Video {}", style($this->str_video_quality($video), 'blue'));
             $downloader = new ThreadedDownloader($this->get_stream_url($video, $data_bag));
             $downloader->saveto($fname);
-            if (stream_isatty(STDOUT)) {
-                fwrite(STDOUT, TTY_FLUSH . str_repeat(TTY_UP . TTY_FLUSH, 2));
-                info("Downloaded Video {}", style($this->str_video_quality($video), 'blue'));
-            }
             return $fname;
         };
         $useAdaptive = function () use ($data_bag, $document, $video_manifest, $useFormats, $adaptive_videos, $adaptive_audios, $formats, $fname) {
@@ -93,25 +89,19 @@ final class YoutubeScrapper implements Scrapper
                 $downloader->with_headers($headers);
                 $video_file = tempnam(sys_get_temp_dir(), "scrapper_tmp") . ".mp4";//mp4 is ~not~ correct
                 $downloader->saveto($video_file);
-                if (stream_isatty(STDOUT)) {
-                    fwrite(STDOUT, str_repeat(TTY_FLUSH . TTY_UP . TTY_FLUSH, 2));
-                    info("Downloaded Video {}", style($this->str_video_quality($video), 'blue'));
-                }
                 $this->log->info("Saved video part in $video_file");
                 info("Downloading Audio");
                 $downloader = new ThreadedDownloader($this->get_stream_url($audio, $data_bag));
                 $downloader->with_headers($headers);
                 $audio_file = tempnam(sys_get_temp_dir(), "scrapper_tmp") . ".mp3";//mp3 is ~not~ correct
                 $downloader->saveto($audio_file);
-                if (stream_isatty(STDOUT)) {
-                    fwrite(STDOUT, str_repeat(TTY_FLUSH . TTY_UP . TTY_FLUSH, 2));
-                    info("Downloaded Audio {}", style($this->str_video_quality($video), 'blue'));
-                }
                 $this->log->info("Saved audio part in $audio_file");
                 info("Merging Video with Audio");
                 try {
                     $indicator = new ProgressIndicator("FFmpeg");
                     $this->merge_video_with_audio($video_file, $audio_file, $fname, fn($percentage) => $indicator->update($percentage / 100.0));
+                    $indicator->clear();
+                    echo PHP_EOL;
                     return $fname;
                 } finally {
                     @unlink($video_file);

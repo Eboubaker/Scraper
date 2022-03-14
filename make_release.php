@@ -44,11 +44,10 @@ function main(array $argv): int
             if ($code === 1) return true;
             return false;
         });
-
-        $winx64_target = make_release("standalone-winx64", $rname, $entries + ["bin"]);
-        $box_conf = json_decode(file_get_contents("box.json"), true);
         system("box compile");
+        $box_conf = json_decode(file_get_contents("box.json"), true);
         if (!file_exists($box_conf["output"])) throw new Exception("phar not found");
+        $winx64_target = make_release("standalone-winx64", $rname, $entries + ["bin"]);
 //        $winx86_target = make_release("standalone-winx86", $rname, $entries);
 //        $linux_target = make_release("linux", $rname, $entries);
 

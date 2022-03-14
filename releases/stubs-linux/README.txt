@@ -7,3 +7,5 @@ INSTALL
 
 USAGE
     ./scrap <args>
+
+Report issues in : https://github.com/Eboubaker/Scrapper/issues

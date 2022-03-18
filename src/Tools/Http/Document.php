@@ -118,6 +118,8 @@ class Document
      */
     private function collect_all_json(string $html): array
     {
+        // TODO: this fails on the array part sometimes: https://regex101.com/r/Jj0bRX
+        // i probably have to parse without regex
         $regex_valid_json = <<<'EOF'
         /
         (?(DEFINE)
@@ -150,7 +152,7 @@ class Document
             // remove preg_match empty groups garbage
             ->filter(fn($j) => $j && strlen($j))
             ->map(fn($obj) => json_decode($obj, true))
-            ->filter(function (array $arr) {
+            ->filter(function (array $arr) {// TODO: is this required
                 // keep arrays that contains at least one string key
                 return collect($arr)->filter(fn($v, $k) => is_string($k))
                     ->count();

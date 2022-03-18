@@ -92,6 +92,8 @@ final class ThreadedDownloader implements Downloader
      */
     public function saveto(string $file_name): string
     {
+        // TODO: if a worker completes the part task, then it should help other workers by splitting the remaining range between them
+        // another option is to limit the downloaded size say 50MB, and each time all workers complete then go to the next chunk
         $chunkSize = (int)($this->resource_size / $this->workers_count);
         $workers_link = Channel::make('workers_link', Channel::Infinite);
         $tracker_link = Channel::make('health_link', Channel::Infinite);
@@ -154,7 +156,7 @@ final class ThreadedDownloader implements Downloader
             $events->addChannel($tracker_link);
             $events->setBlocking(true);
             $events->setTimeout(500_000);
-            $running = 0;
+            $running = 0;// TODO: fix negative values
             $indicator = new DownloadIndicator($total);
             $parts = [];
             while ($workersCount > 0) {

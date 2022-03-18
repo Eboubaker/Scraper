@@ -6,6 +6,10 @@
   ],
   "finder": [
     {
+      "in": "vendor",
+      "name": "LICENCE*"
+    },
+    {
       "name": "*.php",
       "exclude": [
         "test",

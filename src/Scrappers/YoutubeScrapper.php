@@ -15,6 +15,7 @@ use Exception;
 use GuzzleHttp\Client as HttpClient;
 use GuzzleHttp\RequestOptions as ReqOpt;
 use Throwable;
+use Tightenco\Collect\Support\Arr;
 
 /**
  * @author Eboubaker Bekkouche <eboubakkar@gmail.com>
@@ -50,8 +51,10 @@ final class YoutubeScrapper implements Scrapper
         $fname = normalize(App::args()->getOpt('output', getcwd()) . "/" . filter_filename(data_get($video_manifest, 'videoDetails.title', "download_" . $document->getFinalUrl())) . ".mp4");
         $useFormats = function () use ($fname, $formats, $video_manifest, $document, $data_bag) {
             $video = $formats->first();
-            preg_match("/(?<authority>https?:\/\/.*?\.com)\//", data_get($video, 'url'), $matches);
             info("Downloading Video {}", style($this->str_video_quality($video), 'blue'));
+            if (Arr::has($video, 'signatureCipher')) {
+                notice("This video is from a verified channel and is protected");
+            }
             return ThreadedDownloader::for($this->get_stream_url($video, $data_bag))
                 ->validate()
                 ->saveto($fname);
@@ -86,6 +89,9 @@ final class YoutubeScrapper implements Scrapper
                     "accept-language" => "en"
                 ];
                 info("Downloading Video {}", style($this->str_video_quality($video), 'blue'));
+                if (Arr::has($video, 'signatureCipher')) {
+                    notice("This video is from a verified channel and is protected");
+                }
                 $video_file = ThreadedDownloader::for($this->get_stream_url($video, $data_bag))
                     ->with_headers($headers)
                     ->validate()
@@ -187,7 +193,6 @@ final class YoutubeScrapper implements Scrapper
      */
     private function get_stream_url(array $stream_manifest, array $data_bag): string
     {
-
         if (isset($stream_manifest['url'])) {
             $this->log->debug("found direct url: $stream_manifest[url]");
             return $stream_manifest['url'];

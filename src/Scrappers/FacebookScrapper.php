@@ -88,7 +88,8 @@ final class FacebookScrapper implements Scrapper
             goto download_by_video_id;
         } else {
             fail:
-            throw new ExpectationFailedException("No media elements were found in this post");
+            notice("the post might not be public in such case add the required cookie headers");
+            throw new ExpectationFailedException("No media elements were found");
         }
     }
 }

@@ -3,10 +3,11 @@
 namespace Eboubaker\Scrapper\Scrappers;
 
 use Eboubaker\Scrapper\App;
-use Eboubaker\Scrapper\Concerns\ScrapperUtils;
+use Eboubaker\Scrapper\Concerns\WritesLogs;
 use Eboubaker\Scrapper\Contracts\Scrapper;
 use Eboubaker\Scrapper\Exception\ExpectationFailedException;
 use Eboubaker\Scrapper\Exception\NotImplementedException;
+use Eboubaker\Scrapper\Scrappers\Shared\ScrapperUtils;
 use Eboubaker\Scrapper\Tools\CLI\ProgressIndicator;
 use Eboubaker\Scrapper\Tools\Http\Document;
 use Eboubaker\Scrapper\Tools\Http\ThreadedDownloader;
@@ -20,7 +21,7 @@ use Throwable;
  */
 final class YoutubeScrapper implements Scrapper
 {
-    use ScrapperUtils;
+    use ScrapperUtils, WritesLogs;
 
     public static function can_scrap(Document $document): bool
     {
@@ -51,9 +52,9 @@ final class YoutubeScrapper implements Scrapper
             $video = $formats->first();
             preg_match("/(?<authority>https?:\/\/.*?\.com)\//", data_get($video, 'url'), $matches);
             info("Downloading Video {}", style($this->str_video_quality($video), 'blue'));
-            $downloader = new ThreadedDownloader($this->get_stream_url($video, $data_bag));
-            $downloader->saveto($fname);
-            return $fname;
+            return ThreadedDownloader::for($this->get_stream_url($video, $data_bag))
+                ->validate()
+                ->saveto($fname);
         };
         $useAdaptive = function () use ($data_bag, $document, $video_manifest, $useFormats, $adaptive_videos, $adaptive_audios, $formats, $fname) {
             $ffmpeg = make_ffmpeg();
@@ -85,20 +86,18 @@ final class YoutubeScrapper implements Scrapper
                     "accept-language" => "en"
                 ];
                 info("Downloading Video {}", style($this->str_video_quality($video), 'blue'));
-                $downloader = new ThreadedDownloader($this->get_stream_url($video, $data_bag), 32);
-                $downloader->with_headers($headers);
-                $video_file = tempnam(sys_get_temp_dir(), "scrapper_tmp") . ".mp4";//mp4 is ~not~ correct
-                $downloader->saveto($video_file);
-                $this->log->info("Saved video part in $video_file");
+                $video_file = ThreadedDownloader::for($this->get_stream_url($video, $data_bag))
+                    ->with_headers($headers)
+                    ->validate()
+                    ->saveto(random_name(App::cache_get('output_dir'), 'scr', 'mp4'));//mp4 is ~not~ correct
                 info("Downloading Audio");
-                $downloader = new ThreadedDownloader($this->get_stream_url($audio, $data_bag));
-                $downloader->with_headers($headers);
-                $audio_file = tempnam(sys_get_temp_dir(), "scrapper_tmp") . ".mp3";//mp3 is ~not~ correct
-                $downloader->saveto($audio_file);
-                $this->log->info("Saved audio part in $audio_file");
+                $audio_file = ThreadedDownloader::for($this->get_stream_url($audio, $data_bag))
+                    ->with_headers($headers)
+                    ->validate()
+                    ->saveto(random_name(App::cache_get('output_dir'), 'scr', 'mp3'));//mp3 is ~not~ correct
                 info("Merging Video with Audio");
+                $indicator = new ProgressIndicator("FFmpeg");
                 try {
-                    $indicator = new ProgressIndicator("FFmpeg");
                     $this->merge_video_with_audio($video_file, $audio_file, $fname, fn($percentage) => $indicator->update($percentage / 100.0));
                     $indicator->clear();
                     echo PHP_EOL;

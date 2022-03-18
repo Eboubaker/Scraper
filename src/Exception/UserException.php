@@ -2,7 +2,7 @@
 
 namespace Eboubaker\Scrapper\Exception;
 
-// last code: 18 (DownloadFailedException)
+// last code: 19 (FileSystemException)
 abstract class UserException extends \Exception
 {
     public function __construct($message = "", \Throwable $previous = null)

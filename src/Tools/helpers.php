@@ -56,6 +56,22 @@ function debug(string $msg, ...$args)
 }
 
 
+/**
+ * @param Closure<bool> $closure
+ * @return bool
+ */
+function wrap_warnings(\Closure $closure): bool
+{
+    set_error_handler(
+        function (int $errno, string $errstr) {
+            error("$errstr");
+        }
+    );
+    $success = $closure();
+    restore_error_handler();
+    return $success;
+}
+
 function style(string $text, ...$styles): string
 {
     $codes = [
@@ -245,7 +261,7 @@ function download_static_media_url(string $url, string $filename): string
 /**
  * @author Eboubakkar Bekkouche <eboubakkar@gmail.com>
  */
-function logfile(?string $name = 'scrapper.log', bool $create_paths = false)
+function logfile(?string $name = 'scrapper.log', bool $create_paths = false): string
 {
     if ($name == null) $name = 'scrapper.log';
     $p = rootpath('logs/' . $name);
@@ -469,4 +485,14 @@ function make_monolog($name = 'main', $level = \Monolog\Logger::DEBUG): \Psr\Log
     $handler->setFormatter(new \Monolog\Formatter\LineFormatter("%datetime% [%level_name%] %channel% %message% %context% %extra%\n"));
     $log->pushHandler($handler);
     return $log;
+}
+
+
+/**
+ * @throws Exception if an appropriate source of randomness cannot be found.
+ */
+function random_name($directory, $prefix = '', $ext = null): string
+{
+    $fname = $prefix . substr(hash('md5', random_bytes(256)), 0, 4) . ".tmp" . putif($ext, ".$ext");
+    return normalize("$directory/$fname");
 }

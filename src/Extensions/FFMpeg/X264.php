@@ -1,4 +1,4 @@
-<?php
+<?php /** @noinspection PhpMissingReturnTypeInspection */
 
 namespace Eboubaker\Scrapper\Extensions\FFMpeg;
 

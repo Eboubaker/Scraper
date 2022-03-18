@@ -3,11 +3,12 @@
 namespace Eboubaker\Scrapper\Scrappers;
 
 use Eboubaker\Scrapper\App;
-use Eboubaker\Scrapper\Concerns\ScrapperUtils;
+use Eboubaker\Scrapper\Concerns\WritesLogs;
 use Eboubaker\Scrapper\Contracts\Scrapper;
 use Eboubaker\Scrapper\Exception\DownloadFailedException;
 use Eboubaker\Scrapper\Exception\ExpectationFailedException;
 use Eboubaker\Scrapper\Exception\WebPageNotLoadedException;
+use Eboubaker\Scrapper\Scrappers\Shared\ScrapperUtils;
 use Eboubaker\Scrapper\Tools\Http\Document;
 use Eboubaker\Scrapper\Tools\Http\ThreadedDownloader;
 use Throwable;
@@ -17,7 +18,7 @@ use Throwable;
  */
 final class FacebookScrapper implements Scrapper
 {
-    use ScrapperUtils;
+    use ScrapperUtils, WritesLogs;
 
     public static function can_scrap(Document $document): bool
     {
@@ -47,7 +48,6 @@ final class FacebookScrapper implements Scrapper
                     "id" => "/$matches[video_id]/",
                     "owner.name"
                 ]) . ".owner.name", fn() => data_get($matches, 'poster'));
-            info("Downloading Video $matches[video_id]" . putif($owner, " from $owner"));
             $url = data_get($data_bag, array_search_match($data_bag, [
                     "id" => "/$matches[video_id]/",
                     "playable_url_quality_hd"
@@ -56,9 +56,12 @@ final class FacebookScrapper implements Scrapper
                     "id" => "/$matches[video_id]/",
                     "playable_url"
                 ]) . ".playable_url");
-            $downloader = new ThreadedDownloader($url, 32);
+            if (!$url) goto fail;
             $fname = normalize(App::cache_get('output_dir') . "/" . putif($owner, "$owner ") . $matches['video_id'] . ".mp4");
-            return $downloader->saveto($fname);
+            info("Downloading Video $matches[video_id]" . putif($owner, " from $owner"));
+            return ThreadedDownloader::for($url)
+                ->validate()
+                ->saveto($fname);
         } else if (preg_match("/$base\/watch(\?.*?)v=(?<video_id>\d+)/", $document->getFinalUrl(), $matches)) {
             goto download_by_video_id;
         } else if (preg_match("/$base\/photo\/(\?.*?)fbid=(?<image_id>\d+)/", $document->getFinalUrl(), $matches)) {
@@ -68,19 +71,23 @@ final class FacebookScrapper implements Scrapper
                     "owner.name"
                 ]) . ".owner.name");
             if (!$owner) $owner = data_get($matches, 'poster');
-            info("Downloading Image $matches[image_id]" . putif($owner, " from $owner"));
             $url = data_get($data_bag, array_search_match($data_bag, [
                     "id" => "/$matches[image_id]/",
                     "image.uri"
                 ]) . ".image.uri");
-            $downloader = new ThreadedDownloader($url, 8);
+            if (!$url) goto fail;
             $fname = normalize(App::cache_get('output_dir') . "/" . putif($owner, "$owner ") . $matches['image_id'] . ".jpg");
-            return $downloader->saveto($fname);
+            info("Downloading Image $matches[image_id]" . putif($owner, " from $owner"));
+            return ThreadedDownloader::for($url)
+                ->setWorkers(8)
+                ->validate()
+                ->saveto($fname);
         } else if (preg_match("/$base\/(?<poster>[^\/]+)\/photos\/[^\/]+\/(?<image_id>\d+)/", $document->getFinalUrl(), $matches)) {
             goto download_by_image_id;
         } else if (preg_match("/$base\/(?<poster>[^\/]+)\/videos\/([^\/]+?\/)?(?<video_id>\d+)/", $document->getFinalUrl(), $matches)) {
             goto download_by_video_id;
         } else {
+            fail:
             throw new ExpectationFailedException("No media elements were found in this post");
         }
     }

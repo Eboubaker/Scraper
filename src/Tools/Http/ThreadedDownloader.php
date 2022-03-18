@@ -2,15 +2,14 @@
 
 namespace Eboubaker\Scrapper\Tools\Http;
 
-use ArrayAccess;
 use Closure;
-use Eboubaker\Scrapper\Concerns\ScrapperUtils;
-use Eboubaker\Scrapper\Contracts\Downloader;
+use Eboubaker\Scrapper\Concerns\WritesLogs;
 use Eboubaker\Scrapper\Exception\ExpectationFailedException;
+use Eboubaker\Scrapper\Exception\FileSystemException;
+use Eboubaker\Scrapper\Scrappers\Shared\ScrapperUtils;
 use Eboubaker\Scrapper\Tools\CLI\DownloadIndicator;
 use Exception;
 use GuzzleHttp\Client as HttpClient;
-use GuzzleHttp\Exception\GuzzleException as HttpClientException;
 use GuzzleHttp\RequestOptions as ReqOpt;
 use parallel\Channel;
 use parallel\Events;
@@ -24,40 +23,52 @@ use Throwable;
 use Tightenco\Collect\Support\Collection;
 
 /**
- * fast download a resource url by chunking it to multiple parts for multiple threads
+ * fast download a resource url by chunking it to multiple parts for multiple threads.
+ * This will allow us to avoid the rate limiting that many sites force.
+ * each thread has an independent connection it's connection will be limited but the sum of all the other threads will make the download process faster
  * @author Eboubaker Bekkouche <eboubakkar@gmail.com>
  */
-final class ThreadedDownloader implements Downloader
+final class ThreadedDownloader
 {
+    use WritesLogs {
+        WritesLogs::__construct as private bootTrait;
+    }
+
     private string $resource_url;
     private int $workers_count;
     private int $resource_size;
     private LoggerInterface $log;
     private array $append_headers = [];
+    private bool $validated = false;
 
-    /**
-     * @throws ExpectationFailedException
-     * @throws Throwable
-     * @throws HttpClientException
-     */
-    public function __construct(string $resource_url, int $workers_count = 32)
+
+    private function __construct(string $resource_url)
     {
+        $this->bootTrait();
         $this->resource_url = $resource_url;
-        $this->workers_count = $workers_count;
-        $this->log = make_monolog('ThreadedDownloader');
-        $this->resource_size = $this->get_resource_size();
+        $this->workers_count = 32;
     }
 
     /**
-     * @throws ExpectationFailedException
-     * @throws Throwable
-     * @throws HttpClientException
+     * @throws Exception if count is equal or less than 0
      */
-    private function get_resource_size(): int
+    public function setWorkers(int $count): self
+    {
+        if ($count <= 0) throw new Exception("count cannot be less than 0");
+        $this->workers_count = $count;
+        return $this;
+    }
+
+    /**
+     * will probe the resource by sending a head request
+     * @throws ExpectationFailedException if the response content_length was 0 or if the response does not support resume
+     * @throws Throwable if an http error occurred during the validation request
+     */
+    public function validate(): self
     {
         try {
             $client = new HttpClient([
-                'timeout' => 8,
+                'timeout' => 60,
                 'allow_redirects' => true,
                 'verify' => false, // TODO: SSL
             ]);
@@ -78,22 +89,37 @@ final class ThreadedDownloader implements Downloader
                 if (!$total) {
                     throw new ExpectationFailedException("could not determine resource size");
                 } else {
-                    return $total;
+                    $this->resource_size = $total;
                 }
             }
         } catch (Throwable $e) {
             $this->log->error($e->getMessage(), ["function" => __FUNCTION__]);
             throw $e;
         }
+        $this->validated = true;
+        return $this;
     }
 
     /**
+     * @param string $resource_url resource to download
+     * @return ThreadedDownloader a new instance
+     */
+    public static function for(string $resource_url): ThreadedDownloader
+    {
+        return new ThreadedDownloader($resource_url);
+    }
+
+    /**
+     * saves the resource to the provided path
+     * @return string file_name parameter
      * @throws Throwable
      */
     public function saveto(string $file_name): string
     {
-        // TODO: if a worker completes the part task, then it should help other workers by splitting the remaining range between them
-        // another option is to limit the downloaded size say 50MB, and each time all workers complete then go to the next chunk
+        // TODO: at the end of the download there is always 1 or 2 workers fall behind and they will make the download too slow at the end...
+        // TODO: possible fix: if a worker completes the part task, then it should help other workers by splitting the remaining range between them
+        // TODO: another option is to limit the downloaded size say 50MB, and each time all workers complete a chunk of 50MB, go to the next chunk
+        if (!$this->validated) throw new Exception("validate the resource before saving");
         $chunkSize = (int)($this->resource_size / $this->workers_count);
         $workers_link = Channel::make('workers_link', Channel::Infinite);
         $tracker_link = Channel::make('health_link', Channel::Infinite);
@@ -104,44 +130,57 @@ final class ThreadedDownloader implements Downloader
             $vendor_dir = rootpath('/vendor/autoload.php');
         }
         $makeRuntime = fn() => new Runtime($vendor_dir);
+        {// allocate the required space for the output or fail
+            if (!wrap_warnings(function () use ($file_name) {
+                $res = fopen($file_name, 'w+b');
+                $success = true;
+                $success &= 0 === fseek($res, $this->resource_size + $this->resource_size / $this->workers_count - 1, SEEK_CUR);
+                $success &= fwrite($res, 'e', 1);
+                $success &= fclose($res);
+                return $success;
+            })) {
+                @unlink($file_name);
+                throw new FileSystemException("could not create temporary output file $file_name");
+            }
+        }
+        @unlink($file_name);
         $tracker = $makeRuntime()->run($this->make_tracker_task(), [
             "Tracker",
             $this->workers_count,
             $this->resource_size
         ]);
+        $parts = [];
         for ($i = 0; $i < $this->workers_count; $i++) {
-            $downloaded = 0;// TODO: put downloaded parts hash in some directory and read them later to allow resume option
+            $downloaded = 0;
             $start = $i * $chunkSize + $downloaded;
             $end = $i == $this->workers_count - 1 ? $this->resource_size - 1 : $start + $chunkSize - 1;
+            $part = tempnam(sys_get_temp_dir(), 'scr');
+            $parts[] = $part;
             $workers[] = $makeRuntime()->run($this->make_worker_task(), [
                 $i,
                 $this->resource_url,
                 $start,
                 $end,
                 ScrapperUtils::make_curl_headers() + $this->append_headers,
-                'workers_link'
+                'workers_link',
+                $part,
             ]);
         }
         do usleep(500_000);
         while ($workers->contains(fn(Future $task) => !$task->done()));
         if (!$tracker->done())
             usleep(2_000_000);
-        $tracker_link->send(["message" => "STOP"]);
+        $tracker_link->send(["message" => "STOPURSELF"]);
         usleep(300_000);
         echo "\n";
         if (!$tracker->done()) $this->log->warning("sent stop signal to tracker but it did not stop, this will probably cause an error or cause the main thread to hang");
         $workers_link->close();
         $tracker_link->close();
-        $parts = collect($tracker->value())->filter()->sort();
-        if ($parts->count() !== $workers->count()) {
+        if ($tracker->value() !== $workers->count()) {
+            @unlink($file_name);
             throw new ExpectationFailedException("not all file parts finished downloading");
         }
         $this->files_merge($parts, $file_name);
-        foreach ($parts as $part) {
-            if (!@unlink($part)) {
-                $this->log->warning("temporary file not removed: $part", ['function' => __FUNCTION__]);
-            }
-        }
         return $file_name;
     }
 
@@ -156,25 +195,27 @@ final class ThreadedDownloader implements Downloader
             $events->addChannel($tracker_link);
             $events->setBlocking(true);
             $events->setTimeout(500_000);
-            $running = 0;// TODO: fix negative values
+            $running = 0;
             $indicator = new DownloadIndicator($total);
-            $parts = [];
+            $doneCount = 0;
             while ($workersCount > 0) {
                 try {
                     $event = $events->poll();
                     $events->addChannel($workers_link);
                     if (EventType::Read === $event->type) {
                         $message = (array)$event->value;// force fail if not array
-                        if ($message['event'] === 'PROGRESSING') {
-                            $indicator->progress($message['data']['downloaded']);
-                        } else if ($message['event'] === 'STRUGGLING') $running--;
-                        else if ($message['event'] === 'MAKING_NEW_ATTEMPT' || $message['event'] === 'STARTING') $running++;
+                        if ($message['event'] !== 'PROGRESSING') $log->debug(json_encode($message));
+                        if ($message['event'] === 'PROGRESSING') $indicator->progress($message['data']['downloaded']);
+                        else if ($message['event'] === 'STRUGGLING') $running--;
+                        else if ($message['event'] === 'STARTING') $running++;
                         else if ($message['event'] === 'DONE') {
-                            $log->debug("got event done: " . json_encode($message));
+                            $doneCount++;
                             $workersCount--;
                             $running--;
-                            $parts[$message['worker_id']] = $message['data']['part_path'];
-                        } else if ($message['event'] === 'STOP') break;// message from master thread
+                        } else if ($message['event'] === 'FAILED') {
+                            $workersCount--;
+                            $running--;
+                        } else if ($message['event'] === 'STOPURSELF') break;// message from master thread
                     } elseif (EventType::Close === $event->type) {
                         $log->debug("got close event type");
                         break;
@@ -187,20 +228,20 @@ final class ThreadedDownloader implements Downloader
                 }
             }
             $indicator->clear();
-            $log->debug("collected parts: " . json_encode($parts));
-            return $parts;
+            $log->debug("collected parts: " . json_encode($doneCount));
+            return $doneCount;
         };
     }
 
     private function make_worker_task(): Closure
     {
-        return function (int $worker_id, string $url, int $start, int $end, $append_headers, $report_channel) {
+        return function (int $worker_id, string $url, int $start, int $end, $append_headers, $report_channel, $part_path) {
             $log = make_monolog("worker_$worker_id");
             $workers_link = Channel::open($report_channel);
-            $part_path = tempnam(sys_get_temp_dir(), "scr");
-            $log->debug("will save to: $part_path");
-            $out = fopen($part_path, 'wb+');
-            $attempt = 1;
+            if (!($out = fopen($part_path, 'a+b'))) {
+                $log->error("could not open $part_path for writing");
+                goto fail;
+            }
             $total = $end - $start + 1;
             $log->debug("total=$total");
             $client = new HttpClient([
@@ -209,50 +250,46 @@ final class ThreadedDownloader implements Downloader
                 'verify' => false, // TODO: SSL
             ]);
             $buffer_size = bytes('64kb');
-            $total_write = 0;
+            $total_wrote = 0;
             start_over:
             try {
-                $log->debug("Requesting range " . ($start + $total_write) . "-$end");
-                if ($start + $total_write >= $end) {
-                    $log->error("Range start is bigger than end", ["start" => $start, "fstat" => $total_write, "end" => $end]);
-                    return;
+                $workers_link->send([
+                    "worker_id" => $worker_id,
+                    "event" => "STARTING",
+                    "data" => [],
+                ]);
+                $log->debug("Requesting range " . ($start + $total_wrote) . "-$end");
+                if ($start + $total_wrote >= $end) {
+                    $log->error("Range start is bigger than end", ["start" => $start, "total_write" => $total_wrote, "end" => $end]);
+                    goto fail;
                 }
                 $response = $client->get($url, [
                     ReqOpt::HEADERS => [
-                            "Range" => "bytes=" . ($start + $total_write) . "-$end"
+                            "Range" => "bytes=" . ($start + $total_wrote) . "-$end"
                         ] + $append_headers,
                     ReqOpt::STREAM => true,
                     'curl' => [
                         CURLOPT_BUFFERSIZE => $buffer_size
                     ]
                 ]);
-                if ($attempt === 1) {
-                    $workers_link->send([
-                        "worker_id" => $worker_id,
-                        "event" => "STARTING",
-                        "data" => [],
-                    ]);
-                }
                 $log->debug("response code:" . $response->getStatusCode());
                 $log->debug("content-length:" . data_get($response->getHeader('Content-Length'), 0, 0));
                 $stream = $response->getBody();
-                while ($total_write !== $total && !$stream->eof()) {
-                    $read = $stream->read($buffer_size);
-                    $wrote = fwrite($out, $read);
-                    $total_write += $wrote;
+                while ($total_wrote !== $total && !$stream->eof()) {
+                    $wrote = fwrite($out, $stream->read($buffer_size));
+                    $total_wrote += $wrote;
                     $workers_link->send([
                         "worker_id" => $worker_id,
                         "event" => "PROGRESSING",
                         "data" => [
                             "downloaded" => $wrote,
-                            "total" => $total
                         ],
                     ]);
                 }
-                if ($total_write !== $total) throw new Exception("unexpected end of input");
-                $log->debug("done downloading with $total_write downloaded out of " . $total);
+                if ($total_wrote !== $total) throw new Exception("unexpected end of input");
+                $log->debug("done downloading with $total_wrote downloaded out of " . $total);
             } catch (Throwable $e) {
-                $log->error((new ReflectionClass($e))->getName() . ": " . $e->getMessage(), ["fstat" => fstat($out)['size'], "total" => $total, "total_write" => $total_write]);
+                $log->error((new ReflectionClass($e))->getName() . ": " . $e->getMessage(), ["total" => $total, "total_write" => $total_wrote]);
                 $workers_link->send([
                     "worker_id" => $worker_id,
                     "event" => "STRUGGLING",
@@ -261,51 +298,49 @@ final class ThreadedDownloader implements Downloader
                     ]
                 ]);
                 usleep(random_int(1_500_000, 3_000_000));
-                $workers_link->send([
-                    "worker_id" => $worker_id,
-                    "event" => "MAKING_NEW_ATTEMPT",
-                    "data" => [
-                        "number" => ++$attempt
-                    ],
-                ]);
                 goto start_over;
             }
             fclose($out);
-            $log->info("saved part to $part_path");
             $workers_link->send([
                 "worker_id" => $worker_id,
                 "event" => "DONE",
-                "data" => [
-                    "part_path" => $part_path
-                ],
             ]);
+            return;
+            fail:
+            $workers_link->send([
+                "worker_id" => $worker_id,
+                "event" => "FAILED",
+            ]);
+            @unlink($part_path);
         };
     }
 
-    private function files_merge(ArrayAccess $files, string $file_name)
+    private function files_merge(array $files, string $file_name)
     {
         $dest = fopen($file_name, "w+b");
-        $buffer = bytes('64kb');
+        $buffer_size = bytes('8kb');
         foreach ($files as $f) {
             $FH = fopen($f, "r+");
             $size = fstat($FH)['size'];
             while ($size > 0) {
-                $read = fread($FH, $buffer);
+                $read = fread($FH, $buffer_size);
                 fwrite($dest, $read);
                 $size -= strlen($read);
+            }
+            if (!@unlink($f)) {
+                $this->log->warning(
+                    "temporary file not removed: $f",
+                    ['function' => __FUNCTION__]
+                );
             }
             fclose($FH);
         }
         fclose($dest);
     }
 
-    function get_resource_url(): string
-    {
-        return $this->resource_url;
-    }
-
-    public function with_headers(array $headers)
+    public function with_headers(array $headers): self
     {
         array_push($this->append_headers, $headers);
+        return $this;
     }
 }

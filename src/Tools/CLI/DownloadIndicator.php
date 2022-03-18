@@ -5,7 +5,7 @@ namespace Eboubaker\Scrapper\Tools\CLI;
 class DownloadIndicator
 {
     use HasProgressBar {
-        HasProgressBar::__construct as bootTrait;
+        HasProgressBar::__construct as private bootTrait;
     }
 
     private float $total;
@@ -30,17 +30,20 @@ class DownloadIndicator
 
     public function display($append_caption = '')
     {
+        // refresh the calculations when it is time
         if (microtime(true) > $this->last_show + $this->show_delay) {
-            $this->show_bar($this->downloaded / $this->total, "%s/%s %s/s $append_caption"
-                , human_readable_size($this->downloaded)
-                , human_readable_size($this->total)
-                , human_readable_size($this->current_speed));
-            $this->last_show = microtime(true);
+            // refresh the average speed when it is time.
             if (microtime(true) > $this->last_speed_update + $this->speed_delay) {
                 $this->current_speed = ($this->downloaded - $this->last_downloaded) / (microtime(true) - $this->last_speed_update);
                 $this->last_downloaded = $this->downloaded;
                 $this->last_speed_update = microtime(true);
             }
+
+            $this->show_bar($this->downloaded / $this->total, "%s/%s %s/s $append_caption"
+                , human_readable_size($this->downloaded)
+                , human_readable_size($this->total)
+                , human_readable_size($this->current_speed));
+            $this->last_show = microtime(true);
         }
     }
 }

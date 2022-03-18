@@ -2,7 +2,7 @@
 
 namespace Eboubaker\Scrapper;
 
-use Eboubaker\Scrapper\Concerns\ReadsArguments;
+use Eboubaker\Scrapper\Concerns\ParsesAppArguments;
 use Eboubaker\Scrapper\Concerns\StoresCache;
 use Eboubaker\Scrapper\Contracts\Scrapper;
 use Eboubaker\Scrapper\Exception\InvalidArgumentException;
@@ -13,7 +13,6 @@ use Eboubaker\Scrapper\Scrappers\FacebookScrapper;
 use Eboubaker\Scrapper\Scrappers\RedditScrapper;
 use Eboubaker\Scrapper\Scrappers\YoutubeScrapper;
 use Eboubaker\Scrapper\Tools\Http\Document;
-use ErrorException;
 use Exception;
 
 /**
@@ -21,7 +20,7 @@ use Exception;
  */
 final class App
 {
-    use StoresCache, ReadsArguments;
+    use StoresCache, ParsesAppArguments;
 
     private static bool $bootstrapped = false;
 
@@ -62,24 +61,14 @@ final class App
     }
 
     /**
-     * @throws InvalidArgumentException
-     * @throws ErrorException
+     * @throws InvalidArgumentException on invalid cli arguments
      */
     private static function bootstrap(array $args)
     {
-        // convert errors to exceptions.
-        set_error_handler(function (int    $errno,
-                                    string $errstr,
-                                    string $errfile,
-                                    int    $errline) {
-            /** @noinspection PhpUnhandledExceptionInspection */
-            throw new ErrorException($errstr, $errno, 1, $errfile, $errline);
-        });
-
         // parse arguments
         App::$arguments = self::parse_arguments($args);
         // show version and exit if requested version option.
-        if (App::args()->getOpt('version')) die("v0.0.1" . PHP_EOL);
+        if (App::args()->getOpt('version')) die("v0.1.0" . PHP_EOL);
 
         // make logs directory if not exists
         if (!file_exists(dirname(logfile()))) mkdir(dirname(logfile()));
@@ -102,7 +91,7 @@ final class App
 
 
         // disable pcre jit because we are dealing with big chunks of text
-        ini_set("pcre.jit", '0');// TODO: check if required (test big response)
+        ini_set("pcre.jit", '0');
         ini_set("pcre.backtrack_limit", '20000000');
         ini_set("pcre.recursion_limit", '20000000');
         self::$bootstrapped = true;
@@ -117,6 +106,7 @@ final class App
     {
         // escape terminal escape char '\'
         $url = str_replace('\\', '', App::args()->getArg('url', ''));
+        $url = trim($url);
 
         if (empty($url)) {
             throw new InvalidArgumentException("url was not provided");
@@ -180,6 +170,9 @@ final class App
 //        }
     }
 
+    /**
+     * @return bool was bootstrap() called?
+     */
     public static function bootstrapped(): bool
     {
         return !!self::$bootstrapped;

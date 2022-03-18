@@ -2,7 +2,7 @@
   "name": "eboubaker/scrapper",
   "description": "CLI based Web Media-Scrapper",
   "type": "project",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "require": {
     "php": ">=7.4",
     "ext-json": "*",
@@ -43,7 +43,8 @@
   ],
   "autoload": {
     "files": [
-      "src/Tools/helpers.php"
+      "src/Tools/helpers.php",
+      "src/Tools/error_handler.php"
     ],
     "psr-4": {
       "Eboubaker\\Scrapper\\": "src/"

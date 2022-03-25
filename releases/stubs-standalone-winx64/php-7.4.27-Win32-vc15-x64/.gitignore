@@ -1,0 +1,5 @@
+*
+!.gitignore
+# normal php but did the following steps:
+# added vcruntime.dll v14.16
+# enabled required extensions

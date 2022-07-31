@@ -31,8 +31,10 @@ function main(array $argv): int
         $rname = 'v' . $rname;
     echo "Making : $rname" . PHP_EOL;
     echo "optimizing autoloader" . PHP_EOL;
-    system("composer install --no-dev");
-    system("composer dumpa");
+    system("composer install --no-dev", $code);
+    $code != 0 && die("exited with code $code");
+    system("composer dump-autoload", $code);
+    $code != 0 && die("exited with code $code");
     try {
         // filter unwanted entries using git
         $entries = array_diff(scandir('.'), ['.', '..']);
@@ -44,7 +46,8 @@ function main(array $argv): int
             if ($code === 1) return true;
             return false;
         });
-        system("box compile");
+        system("box compile", $code);
+        $code != 0 && die("exited with code $code");
         $box_conf = json_decode(file_get_contents("box.json"), true);
         if (!file_exists($box_conf["output"])) throw new Exception("phar not found");
         $winx64_target = make_release("standalone-winx64", $rname, $entries + ["bin"]);
@@ -65,7 +68,7 @@ function main(array $argv): int
         echo "Pushing: $rname\r\n";
         system("gh release create " . quote($rname) . " --generate-notes " . quote($box_conf["output"]) . " " . quote($winx64_target), $code);
         if ($code !== 0) {
-            throw new Exception("Failed to create release with githubCLI");
+            throw new Exception("Failed to create release with githubCLI, exit code $code");
         }
 //        @unlink($winx86_target);
 //        @unlink($linux_target);

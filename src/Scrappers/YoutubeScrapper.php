@@ -113,18 +113,18 @@ final class YoutubeScrapper implements Scrapper
                 try {
                     info("Downloading Video {}", style($this->str_video_quality($video), 'blue'));
                     $vfile = random_name(Memory::cache_get('output_dir'), 'stream-', 'mp4');// might not be mp4, but anyways..
+                    $vdownloader = ThreadedDownloader::for($video_url, $document->getFinalUrl())
+                        ->with_headers($headers)
+                        ->validate();
                     App::terminating(fn() => file_exists($vfile) && @unlink($vfile));
-                    $video_file = ThreadedDownloader::for($video_url, $document->getFinalUrl())
-                        ->with_headers($headers)
-                        ->validate()
-                        ->saveto($vfile);
-                    info("Downloading Audio");
                     $afile = random_name(Memory::cache_get('output_dir'), 'stream-', 'mp3');
-                    App::terminating(fn() => file_exists($afile) && @unlink($afile));
-                    $audio_file = ThreadedDownloader::for($audio_url, $document->getFinalUrl())
+                    $adownloader = ThreadedDownloader::for($audio_url, $document->getFinalUrl())
                         ->with_headers($headers)
-                        ->validate()
-                        ->saveto($afile);
+                        ->validate();
+                    App::terminating(fn() => file_exists($afile) && @unlink($afile));
+                    $video_file = $vdownloader->saveto($vfile);
+                    info("Downloading Audio");
+                    $audio_file = $adownloader->saveto($afile);
                     info("Merging Video with Audio");
                     $indicator = new ProgressIndicator("FFmpeg");
                     $this->merge_video_with_audio($video_file, $audio_file, $fname, fn($percentage) => $indicator->update($percentage / 100.0));

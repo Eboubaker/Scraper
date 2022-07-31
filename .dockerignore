@@ -2,9 +2,16 @@
 /.git
 /.idea
 /logs
+/cache
 /releases
 /DEV_NOTES
 .phpunit.result.cache
 /downloads/
 /**/*.cache
 /bin
+/docs
+*.mp4
+*.mp3
+*.jpg
+*.jpeg
+*.png

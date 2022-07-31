@@ -4,13 +4,19 @@ With this tool you can download videos & images from popular websites.
 
 # Quickstart
 
-Download [latest release](https://github.com/Eboubaker/Scrapper/releases/latest) or directly run with Docker
+Download [latest windows release](https://github.com/Eboubaker/Scrapper/releases/latest).  
+for linux you can build the tool with composer.
+
+### Docker
+
+an alternative is to run the tool with docker which will skip all requirements
 
 ```bash
-docker run -it --rm -v %cd%:/app/downloads eboubaker/scrapper <args>
+docker run -it --rm -v %cd%:/downloads eboubaker/scrapper <args>
 ```
 
-> Replace `%cd%` with `$(pwd)` on linux
+> Replace `%cd%` with `$(pwd)` on linux.  
+> Output will be on the current terminal directory.
 
 USAGE
 

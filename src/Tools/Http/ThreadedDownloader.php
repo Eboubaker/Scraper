@@ -265,12 +265,12 @@ final class ThreadedDownloader
                         $log->debug("got close event type");
                         break;
                     }
-                    $indicator->display("($running workers)");
                 } catch (Events\Error\Timeout $e) {
-                    // nothing
+                    // just poll timeout
                 } catch (Throwable $e) {
                     $log->error($e->getMessage());
                 }
+                $indicator->display("($running workers)");
             }
             $indicator->clear();
             $log->debug("collected parts: " . json_encode($doneCount));

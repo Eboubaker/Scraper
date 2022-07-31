@@ -3,10 +3,12 @@
 namespace Eboubaker\Scrapper\Tools\Http;
 
 use Closure;
+use Eboubaker\Scrapper\App;
 use Eboubaker\Scrapper\Concerns\WritesLogs;
 use Eboubaker\Scrapper\Exception\ExpectationFailedException;
 use Eboubaker\Scrapper\Exception\FileSystemException;
 use Eboubaker\Scrapper\Scrappers\Shared\ScrapperUtils;
+use Eboubaker\Scrapper\Tools\Cache\FS;
 use Eboubaker\Scrapper\Tools\CLI\DownloadIndicator;
 use Exception;
 use GuzzleHttp\Client as HttpClient;
@@ -17,7 +19,6 @@ use parallel\Events\Event\Type as EventType;
 use parallel\Future;
 use parallel\Runtime;
 use Phar;
-use Psr\Log\LoggerInterface;
 use ReflectionClass;
 use Throwable;
 use Tightenco\Collect\Support\Collection;
@@ -30,23 +31,28 @@ use Tightenco\Collect\Support\Collection;
  */
 final class ThreadedDownloader
 {
-    use WritesLogs {
-        WritesLogs::__construct as private bootTrait;
-    }
+    use WritesLogs;
 
     private string $resource_url;
+    private string $resourceId;
     private int $workers_count;
     private int $resource_size;
-    private LoggerInterface $log;
     private array $append_headers = [];
     private bool $validated = false;
 
 
-    private function __construct(string $resource_url)
+    /**
+     * @param string $resource_url resource to download
+     * @param string $resourceId the unique identifier of the resource, will be used as a key to resume the download if previously interrupted
+     * @return ThreadedDownloader a new instance with 32 workers
+     */
+    public static function for(string $resource_url, string $resourceId): ThreadedDownloader
     {
-        $this->bootTrait();
-        $this->resource_url = $resource_url;
-        $this->workers_count = 32;
+        $instance = new ThreadedDownloader();
+        $instance->workers_count = 32;
+        $instance->resource_url = $resource_url;
+        $instance->resourceId = $resourceId;
+        return $instance;
     }
 
     /**
@@ -54,7 +60,7 @@ final class ThreadedDownloader
      */
     public function setWorkers(int $count): self
     {
-        if ($count <= 0) throw new Exception("count cannot be less than 0");
+        if ($count <= 0) throw new Exception("workers count cannot be less than 0");
         $this->workers_count = $count;
         return $this;
     }
@@ -101,28 +107,28 @@ final class ThreadedDownloader
     }
 
     /**
-     * @param string $resource_url resource to download
-     * @return ThreadedDownloader a new instance
-     */
-    public static function for(string $resource_url): ThreadedDownloader
-    {
-        return new ThreadedDownloader($resource_url);
-    }
-
-    /**
      * saves the resource to the provided path
      * @return string file_name parameter
      * @throws Throwable
      */
     public function saveto(string $file_name): string
     {
-        // TODO: at the end of the download there is always 1 or 2 workers fall behind and they will make the download too slow at the end...
-        // TODO: possible fix: if a worker completes the part task, then it should help other workers by splitting the remaining range between them
-        // TODO: another option is to limit the downloaded size say 50MB, and each time all workers complete a chunk of 50MB, go to the next chunk
+        /**
+         * TODO: at the end of the download there is always 1 or 2 workers fall behind and they will make the download too slow at the end...
+         * possible fix: if a worker completes the part task, then it should help other workers by splitting the remaining range between them
+         * another option is to limit the downloaded size say 50MB, and each time all workers complete a chunk of 50MB, go to the next chunk
+         *
+         * TODO: if the resource size is too big (say 10GB) the tokens for the resource will probably expire at some point and the download will stuck in the middle, the workers will keep trying but they will always fail because the tokens have expired,
+         * possible fix: add a "revalidator" parameter which should be a closure that will get a new fresh url and if the master thread detects that the url has expired it will notify the workers with a fresh url by calling the closure to get a new url
+         * helpful note: many sites will put the "expires" timestamp in the url itself we can read that value and check if it is in the past, the master thread will do that check everytime a worker fails
+         */
         if (!$this->validated) throw new Exception("validate the resource before saving");
         $chunkSize = (int)($this->resource_size / $this->workers_count);
         $workers_link = Channel::make('workers_link', Channel::Infinite);
         $tracker_link = Channel::make('health_link', Channel::Infinite);
+        /**
+         * @var Future[]|Collection $workers
+         */
         $workers = new Collection();
         if (running_as_phar()) {
             $vendor_dir = Phar::running(true) . "/vendor/autoload.php";
@@ -149,13 +155,36 @@ final class ThreadedDownloader
             $this->workers_count,
             $this->resource_size
         ]);
-        $parts = [];
+        App::terminating($trackerShutdown = function () use ($tracker) {
+            if (isset($tracker) && !$tracker->done()) {
+                $this->log->debug("post-termination: forcefully terminating tracker");
+                $tracker->cancel();
+            }
+        });
+        $part_locations_cache_key = implode('.', array(__CLASS__, $this->resourceId, $this->workers_count, $this->resource_size));
+        $parts = FS::cache_get($part_locations_cache_key, []);
+        if (empty($parts)) {
+            for ($i = 0; $i < $this->workers_count; $i++) {
+                $parts[] = tempnam(sys_get_temp_dir(), 'scr');
+            }
+            FS::cache_set($part_locations_cache_key, $parts);
+        } else {
+            notice("Resuming download from previous attempt found in cache.");
+        }
+        App::terminating($workersShutdown = function () use ($workers) {
+            if (isset($workers) && is_array($workers)) {
+                foreach ($workers as $worker) {
+                    if (!$worker->done()) {
+                        $this->log->debug("post-termination: forcefully terminating worker");
+                        $worker->cancel();
+                    }
+                }
+            }
+        });
         for ($i = 0; $i < $this->workers_count; $i++) {
             $downloaded = 0;
             $start = $i * $chunkSize + $downloaded;
             $end = $i == $this->workers_count - 1 ? $this->resource_size - 1 : $start + $chunkSize - 1;
-            $part = tempnam(sys_get_temp_dir(), 'scr');
-            $parts[] = $part;
             $workers[] = $makeRuntime()->run($this->make_worker_task(), [
                 $i,
                 $this->resource_url,
@@ -163,9 +192,11 @@ final class ThreadedDownloader
                 $end,
                 ScrapperUtils::make_curl_headers() + $this->append_headers,
                 'workers_link',
-                $part,
+                $parts[$i],
             ]);
+
         }
+        // TODO: remove this busy waiting
         do usleep(500_000);
         while ($workers->contains(fn(Future $task) => !$task->done()));
         if (!$tracker->done())
@@ -177,10 +208,24 @@ final class ThreadedDownloader
         $workers_link->close();
         $tracker_link->close();
         if ($tracker->value() !== $workers->count()) {
-            @unlink($file_name);
+            if (file_exists($file_name)) @unlink($file_name);
             throw new ExpectationFailedException("not all file parts finished downloading");
         }
         $this->files_merge($parts, $file_name);
+        App::onSuccessfulTermination(function () use ($part_locations_cache_key, $parts) {
+            $this->log->debug("post-termination: removing cache entry for $part_locations_cache_key");
+            FS::cache_forget($part_locations_cache_key);
+            foreach ($parts as $part) {
+                $this->log->debug("post-termination: removing part $part");
+                if (!@unlink($part)) {
+                    $this->log->warning(
+                        "temporary file not removed: $part",
+                        ['function' => __FUNCTION__]
+                    );
+                }
+            }
+        });
+        App::terminatingUnregister($workersShutdown, $trackerShutdown);
         return $file_name;
     }
 
@@ -250,7 +295,16 @@ final class ThreadedDownloader
                 'verify' => false, // TODO: SSL
             ]);
             $buffer_size = bytes('64kb');
-            $total_wrote = 0;
+            $total_wrote = fstat($out)['size'];// get downloaded size if previously interrupted, otherwise 0
+            if ($total_wrote != 0) {// resume the download, update the progress
+                $workers_link->send([
+                    "worker_id" => $worker_id,
+                    "event" => "PROGRESSING",
+                    "data" => [
+                        "downloaded" => $total_wrote,
+                    ],
+                ]);
+            }
             start_over:
             try {
                 $workers_link->send([
@@ -258,11 +312,15 @@ final class ThreadedDownloader
                     "event" => "STARTING",
                     "data" => [],
                 ]);
-                $log->debug("Requesting range " . ($start + $total_wrote) . "-$end");
+                if ($total_wrote === $total) {
+                    $log->debug("already downloaded $total_wrote bytes of $total bytes");
+                    goto done;
+                }
                 if ($start + $total_wrote >= $end) {
                     $log->error("Range start is bigger than end", ["start" => $start, "total_write" => $total_wrote, "end" => $end]);
                     goto fail;
                 }
+                $log->debug("Requesting range " . ($start + $total_wrote) . "-$end");
                 $response = $client->get($url, [
                     ReqOpt::HEADERS => [
                             "Range" => "bytes=" . ($start + $total_wrote) . "-$end"
@@ -300,6 +358,7 @@ final class ThreadedDownloader
                 usleep(random_int(1_500_000, 3_000_000));
                 goto start_over;
             }
+            done:
             fclose($out);
             $workers_link->send([
                 "worker_id" => $worker_id,
@@ -311,7 +370,7 @@ final class ThreadedDownloader
                 "worker_id" => $worker_id,
                 "event" => "FAILED",
             ]);
-            @unlink($part_path);
+            if (file_exists($part_path)) @unlink($part_path);
         };
     }
 
@@ -326,12 +385,6 @@ final class ThreadedDownloader
                 $read = fread($FH, $buffer_size);
                 fwrite($dest, $read);
                 $size -= strlen($read);
-            }
-            if (!@unlink($f)) {
-                $this->log->warning(
-                    "temporary file not removed: $f",
-                    ['function' => __FUNCTION__]
-                );
             }
             fclose($FH);
         }

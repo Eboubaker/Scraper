@@ -2,9 +2,10 @@
 
 namespace Eboubaker\Scrapper\Scrappers;
 
-use Eboubaker\Scrapper\Concerns\ScrapperUtils;
+use Eboubaker\Scrapper\Concerns\WritesLogs;
 use Eboubaker\Scrapper\Contracts\Scrapper;
 use Eboubaker\Scrapper\Exception\NotImplementedException;
+use Eboubaker\Scrapper\Scrappers\Shared\ScrapperUtils;
 use Eboubaker\Scrapper\Tools\Http\Document;
 
 /**
@@ -12,7 +13,7 @@ use Eboubaker\Scrapper\Tools\Http\Document;
  */
 final class RedditScrapper implements Scrapper
 {
-    use ScrapperUtils;
+    use ScrapperUtils, WritesLogs;
 
     public static function can_scrap(Document $document): bool
     {
@@ -20,10 +21,13 @@ final class RedditScrapper implements Scrapper
     }
 
     /**
+     * @return iterable
      * @throws NotImplementedException
      */
-    function scrap(Document $document): string
+    function scrap(Document $document)
     {
+        $data_bag = $document->getObjects();
+
         throw new NotImplementedException("Reddit scrapper will be implemented soon.");
     }
 }

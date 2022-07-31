@@ -11,9 +11,10 @@ use Eboubaker\Scrapper\Tools\Http\Document;
 interface Scrapper
 {
     /**
-     * download the media in the document, should return the filename
+     * download the media(s) in the document, should return the list of filenames
+     * @return string[]|iterable
      */
-    public function scrap(Document $document): string;
+    public function scrap(Document $document);
 
 
     /**

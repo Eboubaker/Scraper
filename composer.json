@@ -22,7 +22,8 @@
     "vanilla/garden-cli": "^3.1",
     "symfony/polyfill-php80": "^1.24",
     "ralouphie/mimey": "^2.1",
-    "monolog/monolog": "^2.3"
+    "monolog/monolog": "^2.3",
+    "eboubaker/json-finder": "*"
   },
   "config": {
     "platform-check": true,
@@ -49,6 +50,11 @@
     "psr-4": {
       "Eboubaker\\Scrapper\\": "src/"
     }
+  },
+  "autoload-dev": {
+    "files": [
+      "src/Tools/debug_helpers.php"
+    ]
   },
   "scripts": {
     "test": "vendor/bin/phpunit --testdox tests",

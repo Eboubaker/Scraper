@@ -8,9 +8,11 @@ use Eboubaker\Scrapper\Contracts\Scrapper;
 use Eboubaker\Scrapper\Exception\ExpectationFailedException;
 use Eboubaker\Scrapper\Exception\NotImplementedException;
 use Eboubaker\Scrapper\Scrappers\Shared\ScrapperUtils;
+use Eboubaker\Scrapper\Tools\Cache\Memory;
 use Eboubaker\Scrapper\Tools\CLI\ProgressIndicator;
 use Eboubaker\Scrapper\Tools\Http\Document;
 use Eboubaker\Scrapper\Tools\Http\ThreadedDownloader;
+use Eboubaker\Scrapper\Tools\Optional;
 use Exception;
 use GuzzleHttp\Client as HttpClient;
 use GuzzleHttp\RequestOptions as ReqOpt;
@@ -29,47 +31,62 @@ final class YoutubeScrapper implements Scrapper
         return !!preg_match("/https?:\/\/((m|www)\.)?youtu(be)?(-nocookie)?\.(com|be)\//", $document->getFinalUrl());
     }
 
+    private function get_video_id(Document $document): string
+    {
+        $url = $document->getFinalUrl();
+        preg_match("/watch\\?v=(?<id>[^&]*)/", $url, $matches);
+        return $matches['id'] ?? '<unkown-id>';
+    }
+
     /**
+     * @return string[]
      * @throws NotImplementedException
      * @throws Exception
      * @throws Throwable
      */
-    function scrap(Document $document): string
+    function scrap(Document $document)
     {
-        $data_bag = $document->getDataBag();
-        $video_manifest = data_get($data_bag, array_search_match($data_bag, [
-                "streamingData.formats",
-                "streamingData.adaptiveFormats"
-            ]) ?? "");
-        $formats = collect(data_get($video_manifest, 'streamingData.formats'))->sort(fn($v2, $v1) => $this->compare_streams($v1, $v2));
-        $adaptive_videos = collect(data_get($video_manifest, 'streamingData.adaptiveFormats'))
+        $manifest = Optional::ofNullable($document->getObjects()->search([
+            "streamingData.formats",
+            "streamingData.adaptiveFormats"
+        ]))->map(function ($obj) {
+            return $obj->get('streamingData');
+        })->orElseThrow(fn() => new ExpectationFailedException("No video manifest found"))->assoc();
+        $formats = collect(data_get($manifest, 'formats'))->sort(fn($v2, $v1) => $this->compare_streams($v1, $v2));
+        $adaptive_videos = collect(data_get($manifest, 'adaptiveFormats'))
             ->filter(fn($v) => stripos(data_get($v, 'mimeType'), 'video') !== false)
             ->sort(fn($v2, $v1) => $this->compare_streams($v1, $v2));
-        $adaptive_audios = collect(data_get($video_manifest, 'streamingData.adaptiveFormats'))
+        $adaptive_audios = collect(data_get($manifest, 'adaptiveFormats'))
             ->filter(fn($v) => stripos(data_get($v, 'mimeType'), 'audio') !== false)
             ->sort(fn($v2, $v1) => $this->compare_streams($v1, $v2));
-        $fname = normalize(App::args()->getOpt('output', getcwd()) . "/" . filter_filename(data_get($video_manifest, 'videoDetails.title', "download_" . $document->getFinalUrl())) . ".mp4");
-        $useFormats = function () use ($fname, $formats, $video_manifest, $document, $data_bag) {
+        //0 = "23.videoDetails.title"
+        //1 = "23.microformat.playerMicroformatRenderer.title.simpleText"
+        //2 = "43.contents.twoColumnWatchNextResults.results.results.contents.0.videoPrimaryInfoRenderer.title.runs.0.text"
+        //3 = "43.playerOverlays.playerOverlayRenderer.videoDetails.playerOverlayVideoDetailsRenderer.title.simpleText"
+        $fname = Optional::ofNullable($document->getObjects()->getAll("**.videoDetails.title")[0] ?? null)
+            ->orElseNew(fn() => $document->getObjects()->getAll("**.playerMicroformatRenderer.title.simpleText")[0] ?? null)
+            ->orElseNew(fn() => $document->getObjects()->getAll("**.playerOverlayVideoDetailsRenderer.title.simpleText")[0] ?? null)
+            ->map(fn($v) => $v->value())
+            ->orElse(fn() => "yt_");
+        $fname = $fname . " [" . $this->get_video_id($document) . "]";
+        $fname = normalize(App::args()->getOpt('output', getcwd()) . "/" . filter_filename($fname) . ".mp4");
+        $useFormats = function () use ($fname, $formats, $manifest, $document) {
             $video = $formats->first();
-            info("Downloading Video {}", style($this->str_video_quality($video), 'blue'));
             if (Arr::has($video, 'signatureCipher')) {
-                notice("This video is from a verified channel and is protected");
+                notice("This video is from a verified channel and is protected, will attempt to decipher the url");
             }
-            return ThreadedDownloader::for($this->get_stream_url($video, $data_bag))
+            $url = $this->get_stream_url($video, $document);
+            info("Downloading Video {}", style($this->str_video_quality($video), 'blue'));
+            return ThreadedDownloader::for($url, '')
                 ->validate()
                 ->saveto($fname);
         };
-        $useAdaptive = function () use ($data_bag, $document, $video_manifest, $useFormats, $adaptive_videos, $adaptive_audios, $formats, $fname) {
-            $ffmpeg = make_ffmpeg();
+        $useAdaptive = function () use ($document, $manifest, $useFormats, $adaptive_videos, $adaptive_audios, $formats, $fname) {
             $video = $adaptive_videos->first();
             $audio = $adaptive_audios->first();
+            $ffmpeg = make_ffmpeg();
             if (!$ffmpeg) {
                 warn("This video has better sources ({}) but it has no sound and the video must be merged with the audio source, but ffmpeg is not installed", $this->str_video_quality($video));
-                if (!host_is_windows_machine()) {
-                    warn("FFmpeg is not installed please install it to have better output, (apt-get install ffmpeg)");
-                } else {
-                    warn("FFmpeg must be installed and put into PATH, https://www.ffmpeg.org/download.html");
-                }
                 warn("Will download lower quality video ({})", $this->str_video_quality($formats->first()));
                 return $useFormats();
             } else {
@@ -88,38 +105,44 @@ final class YoutubeScrapper implements Scrapper
                     "referer" => "https://www.google.com/",
                     "accept-language" => "en"
                 ];
-                info("Downloading Video {}", style($this->str_video_quality($video), 'blue'));
                 if (Arr::has($video, 'signatureCipher')) {
-                    notice("This video is from a verified channel and is protected");
+                    notice("This video is from a verified channel and is protected, will attempt to decipher the url");
                 }
-                $video_file = ThreadedDownloader::for($this->get_stream_url($video, $data_bag))
-                    ->with_headers($headers)
-                    ->validate()
-                    ->saveto(random_name(App::cache_get('output_dir'), 'scr', 'mp4'));//mp4 is ~not~ correct
-                info("Downloading Audio");
-                $audio_file = ThreadedDownloader::for($this->get_stream_url($audio, $data_bag))
-                    ->with_headers($headers)
-                    ->validate()
-                    ->saveto(random_name(App::cache_get('output_dir'), 'scr', 'mp3'));//mp3 is ~not~ correct
-                info("Merging Video with Audio");
-                $indicator = new ProgressIndicator("FFmpeg");
+                $video_url = $this->get_stream_url($video, $document);
+                $audio_url = $this->get_stream_url($audio, $document);
                 try {
+                    info("Downloading Video {}", style($this->str_video_quality($video), 'blue'));
+                    $vfile = random_name(Memory::cache_get('output_dir'), 'stream-', 'mp4');// might not be mp4, but anyways..
+                    App::terminating(fn() => file_exists($vfile) && @unlink($vfile));
+                    $video_file = ThreadedDownloader::for($video_url, $document->getFinalUrl())
+                        ->with_headers($headers)
+                        ->validate()
+                        ->saveto($vfile);
+                    info("Downloading Audio");
+                    $afile = random_name(Memory::cache_get('output_dir'), 'stream-', 'mp3');
+                    App::terminating(fn() => file_exists($afile) && @unlink($afile));
+                    $audio_file = ThreadedDownloader::for($audio_url, $document->getFinalUrl())
+                        ->with_headers($headers)
+                        ->validate()
+                        ->saveto($afile);
+                    info("Merging Video with Audio");
+                    $indicator = new ProgressIndicator("FFmpeg");
                     $this->merge_video_with_audio($video_file, $audio_file, $fname, fn($percentage) => $indicator->update($percentage / 100.0));
                     $indicator->clear();
                     echo PHP_EOL;
                     return $fname;
                 } finally {
-                    @unlink($video_file);
-                    @unlink($audio_file);
+                    if (isset($video_file)) @unlink($video_file);
+                    if (isset($audio_file)) @unlink($audio_file);
                 }
             }
         };
         if ($formats->count() > 0 && $adaptive_videos->count() > 0 && $adaptive_audios->count() > 0 && $this->compare_streams($adaptive_videos->first(), $formats->first()) > 0) {
             // adaptive_video is better
-            return $useAdaptive();
+            return wrapIterable($useAdaptive());
         } else {
             // video in formats is better, no merge required
-            return $useFormats();
+            return wrapIterable($useFormats());
         }
 //        throw new NotImplementedException("Youtube scrapper will be implemented very soon.");
     }
@@ -191,21 +214,30 @@ final class YoutubeScrapper implements Scrapper
     /**
      * @throws ExpectationFailedException if could not detect the stream url
      */
-    private function get_stream_url(array $stream_manifest, array $data_bag): string
+    private function get_stream_url(array $stream_manifest, Document $document): string
     {
+        $this->log->debug("get_stream_url: $stream_manifest[itag]");
         if (isset($stream_manifest['url'])) {
             $this->log->debug("found direct url: $stream_manifest[url]");
             return $stream_manifest['url'];
         } else if (isset($stream_manifest['signatureCipher'])) {
             try {
-                $this->log->debug("Extracting url from video signature", ["signatureCipher" => $stream_manifest["signatureCipher"]]);
-                array_preg_find_key_paths($data_bag, "/^PLAYER_JS_URL$/", $matches);
-                $player_src_url = "https://www.youtube.com" . data_get($data_bag, implode('.', $matches[0]));
+                $this->log->debug("deciphering video signature: $stream_manifest[signatureCipher]");
+                foreach ($document->getObjects()->values() as $key => $value) {
+                    if (preg_match("/\.PLAYER_JS_URL$/", $key, $matches)) {
+                        $player_src_url = "https://www.youtube.com" . $value->value();
+                        break;
+                    }
+                }
+                if (!isset($player_src_url)) {
+                    throw new ExpectationFailedException("Could not decode video signature");
+                }
                 $client = new HttpClient([
                     'timeout' => 60,
                     'allow_redirects' => true,
                     'verify' => false, // TODO: SSL
                 ]);
+                $this->log->debug("loading player source script: $player_src_url");
                 $player_src = $client->get($player_src_url, [
                     ReqOpt::HEADERS => ScrapperUtils::make_curl_headers(),
                 ])->getBody()->getContents();
@@ -279,6 +311,8 @@ final class YoutubeScrapper implements Scrapper
                     $cipher = strrev($cipher);
                 } else if ($op === "splice") {
                     $cipher = substr($cipher, $arg);
+                } else {
+                    throw new Exception("unknown op");
                 }
             }
             return $cipher;

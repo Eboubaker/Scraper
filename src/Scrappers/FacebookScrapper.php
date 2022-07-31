@@ -2,15 +2,20 @@
 
 namespace Eboubaker\Scrapper\Scrappers;
 
-use Eboubaker\Scrapper\App;
+use Eboubaker\JSON\Contracts\JSONEntry;
+use Eboubaker\JSON\JSONObject;
+use Eboubaker\JSON\JSONValue;
 use Eboubaker\Scrapper\Concerns\WritesLogs;
 use Eboubaker\Scrapper\Contracts\Scrapper;
 use Eboubaker\Scrapper\Exception\DownloadFailedException;
 use Eboubaker\Scrapper\Exception\ExpectationFailedException;
+use Eboubaker\Scrapper\Exception\TargetMediaNotFoundException;
 use Eboubaker\Scrapper\Exception\WebPageNotLoadedException;
 use Eboubaker\Scrapper\Scrappers\Shared\ScrapperUtils;
+use Eboubaker\Scrapper\Tools\Cache\Memory;
 use Eboubaker\Scrapper\Tools\Http\Document;
 use Eboubaker\Scrapper\Tools\Http\ThreadedDownloader;
+use Eboubaker\Scrapper\Tools\Optional;
 use Throwable;
 
 /**
@@ -20,77 +25,167 @@ final class FacebookScrapper implements Scrapper
 {
     use ScrapperUtils, WritesLogs;
 
+    private const PATTERN_VIDEO_URL1 =
+        /** @lang RegExp */
+        "/https?:\/\/.{1,3}\.facebook\.com\/(?<poster>[^\/]+)\/videos\/(?<video_id>\d+)/";
+    private const PATTERN_VIDEO_URL2 =
+        /** @lang RegExp */
+        "/https?:\/\/.{1,3}\.facebook\.com\/watch\/?(\?.*?)v=(?<video_id>\d+)/";
+    private const PATTERN_VIDEO_URL3 =
+        /** @lang RegExp */
+        "/https?:\/\/.{1,3}\.facebook\.com\/(?<poster>[^\/]+)\/videos\/([^\/]+?\/)?(?<video_id>\d+)/";
+    private const PATTERN_IMAGE_URL1 =
+        /** @lang RegExp */
+        "/https?:\/\/.{1,3}\.facebook\.com\/(?<poster>[^\/]+)\/photos\/[^\/]+\/(?<image_id>\d+)/";
+    private const PATTERN_IMAGE_URL2 =
+        /** @lang RegExp */
+        "/https?:\/\/.{1,3}\.facebook\.com\/photo\/(\?.*?)fbid=(?<image_id>\d+)/";
+    private const PATTERN_GROUP_POST1 =
+        /** @lang RegExp */
+        "/https?:\/\/.{1,3}\.facebook\.com\/groups\/(?<group_id>[^\/]+)\/permalink\/(?<post_id>\d+)/";
+    private const PATTERN_GROUP_POST2 =
+        /** @lang RegExp */
+        "/https?:\/\/.{1,3}\.facebook\.com\/groups\/(?<group_id>[^\/]+)\/posts\/(?<post_id>\d+)/";
+
     public static function can_scrap(Document $document): bool
     {
-        return !!preg_match("/https?:\/\/(.+\.)?facebook\.com\//", $document->getFinalUrl());
+        return preg_match(self::PATTERN_VIDEO_URL1, $document->getFinalUrl())
+            || preg_match(self::PATTERN_VIDEO_URL2, $document->getFinalUrl())
+            || preg_match(self::PATTERN_VIDEO_URL3, $document->getFinalUrl())
+            || preg_match(self::PATTERN_IMAGE_URL1, $document->getFinalUrl())
+            || preg_match(self::PATTERN_IMAGE_URL2, $document->getFinalUrl())
+            || preg_match(self::PATTERN_GROUP_POST1, $document->getFinalUrl())
+            || preg_match(self::PATTERN_GROUP_POST2, $document->getFinalUrl());
     }
 
     /**
+     * @return string[]
      * @throws WebPageNotLoadedException
      * @throws DownloadFailedException
      * @throws ExpectationFailedException
      * @throws Throwable
      */
-    function scrap(Document $document): string
+    function scrap(Document $document)
     {
         if ($document->getContentLength() < bytes('300kb')) {
-            notice("Response size is too small: {}", style(human_readable_size($document->getContentLength()), 'red'));
+            warn("Response size is too small: {}, this probably indicates facebook redirected you to the login page, please read docs/login.md", style(human_readable_size($document->getContentLength()), 'red'));
         }
         if (preg_match("/\/login\/\?next=/", $document->getFinalUrl())) {
             throw new WebPageNotLoadedException("Facebook redirected me to the login page, This post might be private, try adding required header cookies");
         }
-
-        $data_bag = $document->getDataBag();
-        $base = "https?:\/\/.{1,3}\.facebook\.com";
-        if (preg_match("/$base\/(?<poster>[^\/]+)\/videos\/(?<video_id>\d+)/", $document->getFinalUrl(), $matches)) {
-            download_by_video_id:
-            $owner = data_get($data_bag, array_search_match($data_bag, [
-                    "id" => "/$matches[video_id]/",
-                    "owner.name"
-                ]) . ".owner.name", fn() => data_get($matches, 'poster'));
-            $url = data_get($data_bag, array_search_match($data_bag, [
-                    "id" => "/$matches[video_id]/",
-                    "playable_url_quality_hd"
-                ]) . ".playable_url_quality_hd");
-            if (!$url) $url = data_get($data_bag, array_search_match($data_bag, [
-                    "id" => "/$matches[video_id]/",
-                    "playable_url"
-                ]) . ".playable_url");
-            if (!$url) goto fail;
-            $fname = normalize(App::cache_get('output_dir') . "/" . putif($owner, "$owner ") . $matches['video_id'] . ".mp4");
-            info("Downloading Video $matches[video_id]" . putif($owner, " from $owner"));
-            return ThreadedDownloader::for($url)
-                ->validate()
-                ->saveto($fname);
-        } else if (preg_match("/$base\/watch(\?.*?)v=(?<video_id>\d+)/", $document->getFinalUrl(), $matches)) {
-            goto download_by_video_id;
-        } else if (preg_match("/$base\/photo\/(\?.*?)fbid=(?<image_id>\d+)/", $document->getFinalUrl(), $matches)) {
-            download_by_image_id:
-            $owner = data_get($data_bag, array_search_match($data_bag, [
-                    "id" => "/$matches[image_id]/",
-                    "owner.name"
-                ]) . ".owner.name");
-            if (!$owner) $owner = data_get($matches, 'poster');
-            $url = data_get($data_bag, array_search_match($data_bag, [
-                    "id" => "/$matches[image_id]/",
-                    "image.uri"
-                ]) . ".image.uri");
-            if (!$url) goto fail;
-            $fname = normalize(App::cache_get('output_dir') . "/" . putif($owner, "$owner ") . $matches['image_id'] . ".jpg");
-            info("Downloading Image $matches[image_id]" . putif($owner, " from $owner"));
-            return ThreadedDownloader::for($url)
-                ->setWorkers(8)
-                ->validate()
-                ->saveto($fname);
-        } else if (preg_match("/$base\/(?<poster>[^\/]+)\/photos\/[^\/]+\/(?<image_id>\d+)/", $document->getFinalUrl(), $matches)) {
-            goto download_by_image_id;
-        } else if (preg_match("/$base\/(?<poster>[^\/]+)\/videos\/([^\/]+?\/)?(?<video_id>\d+)/", $document->getFinalUrl(), $matches)) {
-            goto download_by_video_id;
-        } else {
-            fail:
-            notice("the post might not be public in such case add the required cookie headers");
-            throw new ExpectationFailedException("No media elements were found");
+        if (preg_match(self::PATTERN_VIDEO_URL1, $document->getFinalUrl(), $matches)
+            || preg_match(self::PATTERN_VIDEO_URL2, $document->getFinalUrl(), $matches)
+            || preg_match(self::PATTERN_VIDEO_URL3, $document->getFinalUrl(), $matches)) {
+            return wrapIterable($this->download_video($document, $matches['video_id']));
+        } else if (preg_match(self::PATTERN_IMAGE_URL1, $document->getFinalUrl(), $matches)
+            || preg_match(self::PATTERN_IMAGE_URL2, $document->getFinalUrl(), $matches)) {
+            return wrapIterable($this->download_image($document, $matches['image_id']));
+        } else if (preg_match(self::PATTERN_GROUP_POST1, $document->getFinalUrl(), $matches)
+            || preg_match(self::PATTERN_GROUP_POST2, $document->getFinalUrl(), $matches)) {
+            $result = $document->getObjects()->getAll(
+                "**.comet_sections.content.story.attachments.**.styles.attachment.media"
+            );
+            if (isset($result[0]) && $result[0] instanceof JSONObject && $result[0]->has('id')) {
+                $id = $result[0]->get('id')->value();
+                $type = $result[0]->get('__typename');
+                if ($type && strtolower($type->value()) === 'video') {
+                    return wrapIterable($this->download_video($document, $id));
+                } else if ($type && strtolower($type->value()) === 'photo') {
+                    return wrapIterable($this->download_image($document, $id));
+                } else {
+                    throw new ExpectationFailedException("Unknown media type: $type");
+                }
+            } else {
+                throw new TargetMediaNotFoundException("Could not find the media in the post $matches[post_id]");
+            }
         }
+        fail:
+        throw new TargetMediaNotFoundException("No media elements were found");
+    }
+
+    /**
+     * @throws TargetMediaNotFoundException
+     * @throws ExpectationFailedException
+     * @throws Throwable
+     */
+    private function download_image(Document $document, string $id): ?string
+    {
+        $data = $document->getObjects();
+        $title = Optional::ofNullable($data->search([
+            "result.data.id" => fn(JSONEntry $e) => $e instanceof JSONValue && $e->equals($id),
+            "result.data.title.text"
+        ]))->map(function ($object) {
+            return $object->get("result.data.title.text")->value();
+        })->orElse("");
+        $owner = Optional::ofNullable($data->search([
+            "id" => fn(JSONEntry $e) => $e instanceof JSONValue && $e->equals($id),
+            "owner.name"
+        ]))->map(function ($object) {
+            return $object->get("owner.name")->value();
+        })->orElse("");
+        $url = Optional::ofNullable($data->search([
+            "id" => fn(JSONEntry $e) => $e instanceof JSONValue && $e->equals($id),
+            "image.uri"
+        ]))->mapOnce(function ($object) {
+            return $object->get("image.uri")->value();
+        })->orElseNew(function () use ($id, $data) {
+            return $data->search([
+                "id" => fn(JSONEntry $e) => $e instanceof JSONValue && $e->equals($id),
+                "photo_image.uri"
+            ]);
+        })->mapOnce(function ($object) {
+            return $object->get("photo_image.uri")->value();
+        })->orElseThrow(fn() => new TargetMediaNotFoundException("Image \"$id\" not found"));
+        $fname = normalize(
+            Memory::cache_get('output_dir')
+            . "/"
+            . filter_filename("fb_$id" . putif($title, " " . $title) . ".jpg")
+        );
+        info("Will download Image " . style($id, 'cyan,bold') . putif($title, ": $title") . putif($owner, " " . style("FROM", 'cyan,bold') . " $owner"));
+        return ThreadedDownloader::for($url, $document->getFinalUrl())
+            ->setWorkers(8)
+            ->validate()
+            ->saveto($fname);
+    }
+
+    /**
+     * @throws ExpectationFailedException
+     * @throws Throwable
+     * @throws TargetMediaNotFoundException
+     */
+    private function download_video(Document $doc, string $id): ?string
+    {
+        $data = $doc->getObjects();
+        $url = Optional::ofNullable($data->search([
+            "id" => fn($v) => $v->equals($id),
+            "playable_url_quality_hd"
+        ]))->mapOnce(function ($video) {
+            return $video->get("playable_url_quality_hd")->value();
+        })->orElseNew(function () use ($id, $data) {
+            return $data->search([
+                "id" => fn($v) => $v->equals($id),
+                "playable_url"
+            ]);
+        })->mapOnce(function ($video) {
+            return $video->get("playable_url")->value();
+        })->orElseThrow(fn() => new TargetMediaNotFoundException("Video \"$id\" not found"));
+        $title = Optional::ofNullable($data->search([
+            "result.data.id" => fn($e) => $e->equals($id),
+            "result.data.title.text"
+        ]))->map(function ($object) {
+            return $object->get("result.data.title.text")->value();
+        })->orElse("");
+        $owner = Optional::ofNullable($data->search([
+            "id" => fn($e) => $e->equals($id),
+            "owner.name"
+        ]))->map(function ($object) {
+            return $object->get("owner.name")->value();
+        })->orElse("");
+        $fname = normalize(Memory::cache_get('output_dir') . "/" . filter_filename("fb_$id" . putif($title, " " . $title) . ".mp4"));
+        info("Will download Video " . style($id, 'cyan,bold') . putif($title, ": $title") . putif($owner, " " . style("FROM", 'cyan,bold') . " $owner"));
+        return ThreadedDownloader::for($url, $doc->getFinalUrl())
+            ->validate()
+            ->saveto($fname);
     }
 }
 

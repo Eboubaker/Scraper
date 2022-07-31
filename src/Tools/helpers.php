@@ -1,19 +1,19 @@
 <?php /** @noinspection PhpUnnecessaryFullyQualifiedNameInspection,PhpFullyQualifiedNameUsageInspection */
 
 use Eboubaker\Scrapper\App;
+use Eboubaker\Scrapper\Tools\Cache\Memory;
 
 const TTY_UP = "\33[A";// https://www.vt100.net/docs/vt100-ug/chapter3.html#CUU
 const TTY_FLUSH = "\33[2K\r";
 
 /**
- * local write line, register the wrote line
+ * Local Write Line, register the wrote line as stdout_written_lines_count which will be used later to
+ * know how many lines to clear when the app is done
  */
 function lwritel(string $line)
 {
     fwrite(STDOUT, $line . PHP_EOL);
-    if (App::bootstrapped()) {
-        App::cache_set('stdout_wrote_lines', App::cache_get('stdout_wrote_lines', 0) + 1);
-    }
+    App::bootstrapped() && Memory::increment('stdout_written_lines_count');
 }
 
 /**
@@ -74,6 +74,13 @@ function wrap_warnings(\Closure $closure): bool
 
 function style(string $text, ...$styles): string
 {
+    if (!stream_isatty(STDOUT)) {
+        // TODO: the parallel runtime doesn't know about this, the tracker thread will show the warning again.
+        Memory::do_once('tty_colors_warned', function () {
+            fputs(STDOUT, "[WARN] STDOUT is not a TTY device, colors and styles are not supported.\n");
+        });
+        return $text;
+    }
     $codes = [
         'bold' => 1,
         'italic' => 3, 'underline' => 4, 'strikethrough' => 9,
@@ -185,11 +192,12 @@ function running_as_phar(): bool
 /**
  * get path to the project root,
  * if running as phar then return the directory of the phar file.
+ * @throws Error
  * @author Eboubakkar Bekkouche <eboubakkar@gmail.com>
  */
 function rootpath(string $append = ''): string
 {
-    if (!($dir = App::cache_get('internals.rootpath'))) {
+    $dir = Memory::remember('internals.root-path', function () {
         $dir = dirname(Phar::running(false));
         if (!$dir) {
             $dir = realpath(__DIR__);
@@ -199,8 +207,8 @@ function rootpath(string $append = ''): string
                 $dir = dirname($dir);
             if ($tries == 0) throw new Error("root path not resolved");
         }
-        App::cache_set('internals.rootpath', $dir);
-    }
+        return $dir;
+    });
     $append = normalize($append);
     return $dir . putif($append !== '', DIRECTORY_SEPARATOR . $append);
 }
@@ -215,47 +223,6 @@ function normalize(string $path): string
     $path = str_replace("\\\\", "\\", $path);
     $path = str_replace("//", "/", $path);
     return str_replace(["\\", "/"], DIRECTORY_SEPARATOR, $path);
-}
-
-/**
- * @param $object
- * @return string|null
- */
-function className($object): ?string
-{
-    try {
-        return (new ReflectionClass($object))->getShortName();
-    } catch (\Throwable $e) {
-        return null;
-    }
-}
-
-/**
- * get the current working directory path
- * @author Eboubakkar Bekkouche <eboubakkar@gmail.com>
- */
-function consolepath(string $append = ''): string
-{
-    return getcwd() . putif($append !== '', DIRECTORY_SEPARATOR . $append);
-}
-
-/**
- * @author Eboubakkar Bekkouche <eboubakkar@gmail.com>
- */
-function download_static_media_url(string $url, string $filename): string
-{
-    $ch = curl_init($url);
-    $fp = fopen($filename, 'wb');
-    curl_setopt($ch, CURLOPT_FILE, $fp);
-    curl_setopt($ch, CURLOPT_HEADER, 0);
-    if (!curl_exec($ch)) {
-        fclose($fp);
-        unlink($filename);
-        return false;
-    }
-    curl_close($ch);
-    fclose($fp);
-    return $filename;
 }
 
 /**
@@ -276,75 +243,16 @@ function logfile(?string $name = 'scrapper.log', bool $create_paths = false): st
     return $p;
 }
 
-function setClipboard(string $new): bool
-{
-    if (PHP_OS_FAMILY === "Windows") {
-        // works on windows 7 +
-        $clip = popen("clip", "wb");
-    } elseif (PHP_OS_FAMILY === "Linux") {
-        // tested, works on ArchLinux
-        $clip = popen('xclip -selection clipboard', 'wb');
-    } elseif (PHP_OS_FAMILY === "Darwin") {
-        // untested!
-        $clip = popen('pbcopy', 'wb');
-    } else {
-        throw new \Error("running on unsupported OS: " . PHP_OS_FAMILY . " - only Windows, Linux, and MacOS supported.");
-    }
-    $written = fwrite($clip, $new);
-    return (pclose($clip) === 0 && strlen($new) === $written);
-}
-
-/**
- * @author Eboubakkar Bekkouche <eboubakkar@gmail.com>
- */
-function decode_json_url(string $url): string
-{
-    return json_decode("\"$url\"");
-}
-
-/**
- * @author Eboubakkar Bekkouche <eboubakkar@gmail.com>
- */
-function array_preg_find_value_paths(array $haystack, string $pattern, &$accumulator, array $current_path = []): bool
-{
-    $found_something = false;
-    foreach ($haystack as $key => $item) {
-        if ((is_string($item) || is_numeric($item)) && preg_match($pattern, strval($item))) {
-            $accumulator[] = [...$current_path, $key];
-            $found_something = true;
-        }
-    }
-    foreach ($haystack as $key => $item) {
-        if (is_array($item)) {
-            $found_something = array_preg_find_value_paths($item, $pattern, $accumulator, [...$current_path, $key]) || $found_something;
-        }
-    }
-    return $found_something;
-}
-
-/**
- * @author Eboubakkar Bekkouche <eboubakkar@gmail.com>
- */
-function array_dot_find_value(array $array, string $dot_path, &$accumulator, $current_path = ""): bool
-{
-    $found_something = false;
-    if (\Tightenco\Collect\Support\Arr::has($array, $dot_path)) {
-        $accumulator[][$current_path] = data_get($array, $dot_path);
-        $found_something = true;
-    }
-    foreach ($array as $key => $item) {
-        if (is_array($item)) {
-            $found_something = array_dot_find_value($item, $dot_path, $accumulator, $current_path . "." . $key) || $found_something;
-        }
-    }
-    return $found_something;
-}
-
 /**
  * recursively find in a multi-dimensional array an item which contains all the given keys.
  * @author Eboubakkar Bekkouche <eboubakkar@gmail.com>
  */
-function array_search_match(array $array, $keys, $path = ''): ?string
+function array_search_match(array $array, $keys): ?string
+{
+    return __array_search_match($array, $keys, '');
+}
+
+function __array_search_match(array $array, $keys, $path): ?string
 {
     $keys = (array)$keys;// allow string or array
     // array must have the given key and also all adjacent keys
@@ -377,7 +285,7 @@ function array_search_match(array $array, $keys, $path = ''): ?string
     }
     foreach ($array as $key => $item) {
         if (is_array($item)) {
-            $found = array_search_match($item, $keys, $path . '.' . $key);
+            $found = __array_search_match($item, $keys, $path . '.' . $key);
             if ($found) return $found;
         }
     }
@@ -404,14 +312,9 @@ function array_preg_find_key_paths(array $haystack, string $pattern, &$accumulat
     return $found_something;
 }
 
-function map_key_path(array $source, array $paths, $level = 0): array
-{
-    return collect($paths)->mapWithKeys(function ($p) use ($source, $level) {
-        $vp = implode('.', array_slice($p, 0, $level ? -1 * $level : null));
-        return [$vp => data_get($source, $vp)];
-    })->all();
-}
-
+/**
+ * note: might return empty string if all characters are filtered
+ */
 function filter_filename($name): string
 {
     // remove illegal file system characters https://en.wikipedia.org/wiki/Filename#Reserved_characters_and_words
@@ -431,27 +334,28 @@ function filter_filename($name): string
 
 function make_ffmpeg(array $config = []): ?\FFMpeg\FFMpeg
 {
-    try {
-        if (App::cache_has('ffmpeg')) return App::cache_get('ffmpeg');
-        if (!host_is_windows_machine()) {
-            $ffmpeg = \FFMpeg\FFMpeg::create($config);
-        } else {
-            try {
+    return Memory::remember('internals.ffmpeg-instance', function () use ($config) {
+        try {
+            if (!host_is_windows_machine()) {
                 $ffmpeg = \FFMpeg\FFMpeg::create($config);
-            } catch (Throwable $e) {
-                // try get from release
-                $ffmpeg = \FFMpeg\FFMpeg::create([
-                        "ffmpeg.binaries" => rootpath("bin/ffmpeg/ffmpeg.exe"),
-                        "ffprobe.binaries" => rootpath("bin/ffmpeg/ffprobe.exe"),
-                    ] + $config);
+            } else {
+                try {
+                    $ffmpeg = \FFMpeg\FFMpeg::create($config);
+                } catch (Throwable $e) {
+                    // try get from release
+                    $ffmpeg = \FFMpeg\FFMpeg::create([
+                            "ffmpeg.binaries" => rootpath("bin/ffmpeg/ffmpeg.exe"),
+                            "ffprobe.binaries" => rootpath("bin/ffmpeg/ffprobe.exe"),
+                        ] + $config);
+                }
             }
+            return $ffmpeg;
+        } catch (\Throwable $e) {
+            warn("could not get FFMpeg instance, make sure it is installed and available in \$PATH: https://www.ffmpeg.org/download.html");
+            make_monolog(__FILE__ . '@' . __FUNCTION__)->error("Exception:" . (new ReflectionClass($e))->getName() . ":" . $e->getMessage());
+            return null;
         }
-        App::cache_set('ffmpeg', $ffmpeg);
-        return $ffmpeg;
-    } catch (\Throwable $e) {
-        make_monolog()->error("Exception:" . (new ReflectionClass($e))->getName() . ":" . $e->getMessage());
-    }
-    return null;
+    });
 }
 
 
@@ -463,7 +367,7 @@ function headers_associative_to_array(array $headers): array
 function headers_array_to_associative(string $header_raw): array
 {
     $parts = explode(':', $header_raw);
-    return [$parts[0] => implode('', array_slice($parts, 1)), 'parts' => count($parts)];
+    return [$parts[0] => implode('', array_slice($parts, 1))];
 }
 
 /**
@@ -477,8 +381,7 @@ function strip_str($str, $max_len)
     return $str;
 }
 
-
-function make_monolog($name = 'main', $level = \Monolog\Logger::DEBUG): \Psr\Log\LoggerInterface
+function make_monolog($name = 'default', $level = \Monolog\Logger::DEBUG): \Psr\Log\LoggerInterface
 {
     $log = new \Monolog\Logger($name);
     $handler = new \Monolog\Handler\StreamHandler(logfile(), $level, true, null, true);
@@ -495,4 +398,16 @@ function random_name($directory, $prefix = '', $ext = null): string
 {
     $fname = $prefix . substr(hash('md5', random_bytes(256)), 0, 4) . ".tmp" . putif($ext, ".$ext");
     return normalize("$directory/$fname");
+}
+
+/**
+ * @param $value
+ * @return array|iterable
+ */
+function wrapIterable($value)
+{
+    if (is_array($value) || is_iterable($value)) {
+        return $value;
+    }
+    return [$value];
 }

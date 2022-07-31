@@ -24,7 +24,7 @@ trait ParsesAppArguments
         $cli = Cli::create()
             ->description("Download media from a post url")
             ->opt("output:o", "set output directory, default is current working directory")
-            ->opt("verbose:v", "display more useful information", false, 'bool')
+            ->opt("verbose:v", "display more useful information while running", false, 'bool')
             //->opt("quality:q", "default: best, change quality selection behavior allowed values: optimal,best,low", false)
             ->opt("version", "show version", false, 'bool')
             ->opt('header:h', "Add a header to the request (like Cookie), can be repeated", false, "string[]")

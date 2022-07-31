@@ -2,7 +2,9 @@
 
 namespace Eboubaker\Scrapper\Exception;
 
-// last code: 19 (FileSystemException)
+/**
+ * last code: 20 {@link TargetMediaNotFoundException}
+ */
 abstract class UserException extends \Exception
 {
     public function __construct($message = "", \Throwable $previous = null)

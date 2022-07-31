@@ -16,7 +16,7 @@ trait HasProgressBar
         if (stream_isatty(STDOUT)) {
             fwrite(STDOUT, TTY_FLUSH . TTY_UP);
         } else {
-            echo "\n";
+            echo PHP_EOL;
         }
     }
 

@@ -7,6 +7,9 @@ use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
 
 /**
+ * will add a X-GUZZLE-EFFECTIVE-URL header to the response which will represent
+ * the final URL of the request if it was redirected
+ *
  * @author Thinkscape
  * @see https://gist.github.com/Thinkscape/43499cfafda1af8f606d
  */

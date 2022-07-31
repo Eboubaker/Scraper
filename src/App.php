@@ -2,8 +2,8 @@
 
 namespace Eboubaker\Scrapper;
 
+use Closure;
 use Eboubaker\Scrapper\Concerns\ParsesAppArguments;
-use Eboubaker\Scrapper\Concerns\StoresCache;
 use Eboubaker\Scrapper\Contracts\Scrapper;
 use Eboubaker\Scrapper\Exception\InvalidArgumentException;
 use Eboubaker\Scrapper\Exception\RequirementFailedException;
@@ -12,49 +12,110 @@ use Eboubaker\Scrapper\Exception\UserException;
 use Eboubaker\Scrapper\Scrappers\FacebookScrapper;
 use Eboubaker\Scrapper\Scrappers\RedditScrapper;
 use Eboubaker\Scrapper\Scrappers\YoutubeScrapper;
+use Eboubaker\Scrapper\Tools\Cache\FS;
+use Eboubaker\Scrapper\Tools\Cache\Memory;
 use Eboubaker\Scrapper\Tools\Http\Document;
 use Exception;
+use ReflectionClass;
 
 /**
  * @author Eboubaker Bekkouche <eboubakkar@gmail.com>
  */
 final class App
 {
-    use StoresCache, ParsesAppArguments;
+    use ParsesAppArguments;
 
     private static bool $bootstrapped = false;
+    /**
+     * @var Closure[]
+     */
+    private static array $before_shutdown_tasks = [];
+
+    private static bool $successfulTermination = false;
+
+    public static function terminating(Closure $task, string $key = null): void
+    {
+        if (!empty($key)) {
+            self::$before_shutdown_tasks[$key] = $task;
+        } else {
+            self::$before_shutdown_tasks[] = $task;
+        }
+    }
+
+    public static function terminatingUnregister(Closure ...$tasks): void
+    {
+        foreach ($tasks as $task) {
+            $index = array_search($task, self::$before_shutdown_tasks, true);
+            if ($index !== false) {
+                unset(self::$before_shutdown_tasks[$index]);
+            }
+        }
+    }
+
+    public static function onSuccessfulTermination(Closure $task): void
+    {
+        self::$before_shutdown_tasks[] = fn() => self::$successfulTermination && call_user_func($task);
+    }
+
+    public static function registerShutDownHandler()
+    {
+        register_shutdown_function(function () {
+            foreach (self::$before_shutdown_tasks as $task) {
+                try {
+                    $task();
+                } catch (Exception $e) {
+                    make_monolog("App::registerShutDownHandler")->error($e->getMessage());
+                    if (debug_enabled()) {
+                        error("App::registerShutDownHandler " . $e->getMessage());
+                    }
+                }
+            }
+        });
+    }
 
     public static function run(array $args): int
     {
         try {
             self::check_platform();
             self::bootstrap($args);
-            return self::run_main();
-        } catch (InvalidArgumentException $e) {
+            self::registerShutDownHandler();
+            $exit_code = self::run_main();
+            self::$successfulTermination = true;
+            return $exit_code;
+        } catch (InvalidArgumentException $e) {// this is not \InvalidArgumentException, this extends Exceptions\UserException
             echo TTY_FLUSH;
             error($e->getMessage());
             if ($e->getPrevious())
-                error($e->getPrevious()->getMessage());
+                error("Cause: [{}]: {}", (new ReflectionClass($e))->getShortName(), $e->getPrevious()->getMessage());
             tell("run with --help to see usage");
             return $e->getCode();
         } catch (UserException $e) {
             echo TTY_FLUSH;
             if ($e->getPrevious()) {
+                $className = function ($object): ?string {
+                    try {
+                        /** @noinspection PhpUnhandledExceptionInspection */
+                        return (new ReflectionClass($object))->getShortName();
+                    } catch (\Throwable $e) {
+                        return null;
+                    }
+                };
                 $str_cause = '';
                 $current = $e->getPrevious();
                 while ($current) {
-                    $str_cause .= "\n" . style("      * Caused by", 'red,bold') . ": " . className($current) . ": " . $current->getMessage();
+                    $str_cause .= "\n" . style("      * Caused by", 'red,bold') . ": " . $className($current) . ": " . $current->getMessage();
                     $current = $current->getPrevious();
                 }
-                error(className($e) . ": " . $e->getMessage() . $str_cause);
+                error($className($e) . ": " . $e->getMessage() . $str_cause);
             } else {
                 error($e->getMessage());
             }
             return $e->getCode();
-        } catch (Exception $e) {
+        } catch (\Exception $e) {
             echo TTY_FLUSH;
             // display nice error message to console, or maybe bad??
             if (debug_enabled()) dump_exception($e);
+            notice("Report issues to https://github.com/Eboubaker/Scrapper/issues");
             error($e->getMessage());
             return $e->getCode() !== 0 ? $e->getCode() : 100;
         }
@@ -74,18 +135,18 @@ final class App
         if (!file_exists(dirname(logfile()))) mkdir(dirname(logfile()));
 
         if (getenv("SCRAPPER_DOCKERIZED")) {
-            if (!is_dir(rootpath('downloads'))) {
-                notice("The app is running in docker, You need to mount a volume so downloads can be saved: \ndocker run -it -v /your/output/directory:/app/downloads eboubaker/scrapper ...");
-                throw new InvalidArgumentException("Please mount a volume for the directory /app/downloads");
+            if (!is_dir("/downloads")) {
+                notice("The app is running in docker, You need to mount a volume so downloads can be saved: \ndocker run -it -v /your/output/directory:/downloads eboubaker/scrapper ...");
+                throw new InvalidArgumentException("Please mount a volume for the directory /downloads");
             } else {
-                App::cache_set('output_dir', rootpath('downloads'));
+                Memory::cache_set('output_dir', "/downloads");
             }
         } else {
             $dir = App::args()->getOpt('output', getcwd());
             if (!is_dir($dir)) {
                 throw new InvalidArgumentException("No such directory: $dir");
             } else {
-                App::cache_set('output_dir', realpath(normalize($dir)));
+                Memory::cache_set('output_dir', realpath(normalize($dir)));
             }
         }
 
@@ -94,6 +155,8 @@ final class App
         ini_set("pcre.jit", '0');
         ini_set("pcre.backtrack_limit", '20000000');
         ini_set("pcre.recursion_limit", '20000000');
+
+        if (rand(0, 100) > 90) FS::gc();// clear unused cache
         self::$bootstrapped = true;
     }
 
@@ -104,6 +167,10 @@ final class App
      */
     private static function run_main(): int
     {
+//        Document::fromUrl("https://www.youtube.com/watch?v=KH4u-cOANjo&ab_channel=QuickDev")->getJson();
+//        Document::fromUrl("https://www.facebook.com/photo/?fbid=516436823421503&set=gm.562356061828411")->getJson();
+//        Document::fromCache("476425ff443c91cc48f6e02458371987")->getJson();
+//        exit;
         // escape terminal escape char '\'
         $url = str_replace('\\', '', App::args()->getArg('url', ''));
         $url = trim($url);
@@ -115,19 +182,19 @@ final class App
         $document = Document::fromUrl($url);
         if ($url !== $document->getFinalUrl())
             notice("Final url was changed: {}", $document->getFinalUrl() ?? style("NULL", 'red'));
-        info("attempting to determine which extractor to use");
+//        info("attempting to determine which extractor to use");
         /** @var $scrapper Scrapper */
         $scrapper = null;
-        /** @var $availableScrappers array<int, Scrapper> */
-        $availableScrappers = [
+        /** @var $available_scrappers Scrapper[]|string[] */
+        $available_scrappers = [
             FacebookScrapper::class,
             YoutubeScrapper::class,
             RedditScrapper::class
         ];
-        foreach ($availableScrappers as $klass) {
-            if ($klass::can_scrap($document)) {
-                $scrapper = new $klass;
-                $cname = explode("\\", $klass);
+        foreach ($available_scrappers as $class) {
+            if ($class::can_scrap($document)) {
+                $scrapper = new $class;
+                $cname = explode("\\", $class);
                 info("using " . end($cname));
                 break;
             }
@@ -139,18 +206,29 @@ final class App
             notice("if the post url is private you might need to login first");
             throw new UrlNotSupportedException("Could not determine which extractor to use");
         } else {
-            $out = $scrapper->scrap($document);
+            $files = $scrapper->scrap($document);
             if (stream_isatty(STDOUT)) {
-                fwrite(STDOUT, "\33[" . App::cache_get('stdout_wrote_lines') . "A\33[J");
+                $linesCount = Memory::cache_get('stdout_written_lines_count');
+                // clear all previous written lines
+                // TODO: maybe we should keep the lines as log for the user
+                fwrite(STDOUT, "\33[{$linesCount}A\33[J");// https://www.vt100.net/docs/vt100-ug/chapter3.html#S3.3.6
             }
-            if (getenv("SCRAPPER_DOCKERIZED")) {
-                tell("Saved as : " . basename($out));
-            } else {
-                tell("Saved as : $out");
+            foreach ($files as $file) {
+                $file = App::is_dockerized() ? basename($file) : $file;
+                info("SAVED: $file");
             }
-            if (!host_is_windows_machine()) echo PHP_EOL;
+            // linux wont add newline by default.
+            if (!host_is_windows_machine() && !App::is_dockerized()) echo PHP_EOL;
         }
         return 0;
+    }
+
+    /**
+     * is it running inside the docker image?
+     */
+    private static function is_dockerized(): bool
+    {
+        return !!getenv("SCRAPPER_DOCKERIZED");
     }
 
     /**

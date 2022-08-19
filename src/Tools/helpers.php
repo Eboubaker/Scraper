@@ -76,7 +76,7 @@ function style(string $text, ...$styles): string
 {
     if (!stream_isatty(STDOUT)) {
         // TODO: the parallel runtime doesn't know about this, the tracker thread will show the warning again.
-        Memory::do_once('tty_colors_warned', function () {
+        \Eboubaker\Scrapper\Tools\Cache\FS::do_once('tty_colors_warned', function () {
             fputs(STDOUT, "[WARN] STDOUT is not a TTY device, colors and styles are not supported.\n");
         });
         return $text;

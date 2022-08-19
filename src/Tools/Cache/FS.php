@@ -91,6 +91,17 @@ class FS implements Cache
         return $value;
     }
 
+    public static function do_once(string $key, callable $action): void
+    {
+        if (!FS::cache_has($key)) {
+            call_user_func($action);
+            FS::cache_set($key, null);
+            register_shutdown_function(function () use ($key) {
+                if (FS::cache_has($key)) FS::cache_forget($key);
+            });
+        }
+    }
+
     public static function cache_has(string $key): bool
     {
         return @file_exists(self::key_file($key));

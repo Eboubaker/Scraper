@@ -70,7 +70,7 @@ final class YoutubeScrapper implements Scrapper
             ->map(fn($v) => $v->value())
             ->orElse(fn() => "yt_");
         $fname = $fname . " [" . $this->get_video_id($document) . "]";
-        $fname = normalize(App::args()->getOpt('output', getcwd()) . "/" . filter_filename($fname) . ".mp4");
+        $fname = normalize(Memory::cache_get('output_dir') . "/" . filter_filename($fname) . ".mp4");
         $useFormats = function () use ($fname, $formats, $manifest, $document) {
             $video = $formats->first();
             if (Arr::has($video, 'signatureCipher')) {

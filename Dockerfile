@@ -27,7 +27,6 @@ COPY composer* /app/
 COPY src /app/src
 COPY LICENSE.txt /app/
 
-RUN mkdir /downloads
 WORKDIR /app
 RUN composer install --no-dev
 RUN rm -rf /tmp/**

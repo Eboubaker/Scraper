@@ -32,4 +32,8 @@ WORKDIR /app
 RUN composer install --no-dev
 RUN rm -rf /tmp/**
 
+RUN apt-get remove -y apt-utils software-properties-common git unzip
+RUN apt autoremove --purge -y
+RUN apt-get clean
+
 ENTRYPOINT ["php", "src/scrap.php"]

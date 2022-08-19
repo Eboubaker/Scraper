@@ -86,7 +86,7 @@ final class App
         // make logs directory if not exists
         if (!file_exists(dirname(logfile()))) mkdir(dirname(logfile()));
 
-        if (getenv("SCRAPPER_DOCKERIZED")) {
+        if (App::is_dockerized()) {
             if (!is_dir("/downloads")) {
                 notice("The app is running in docker, You need to mount a volume so downloads can be saved: \ndocker run -it -v /your/output/directory:/downloads eboubaker/scrapper ...");
                 throw new InvalidArgumentException("Please mount a volume for the directory /downloads");
@@ -115,7 +115,7 @@ final class App
     /**
      * is it running inside the docker image?
      */
-    private static function is_dockerized(): bool
+    public static function is_dockerized(): bool
     {
         return !!getenv("SCRAPPER_DOCKERIZED");
     }
@@ -194,7 +194,9 @@ final class App
                 // TODO: maybe we should keep the lines as log for the user
                 fwrite(STDOUT, "\33[{$linesCount}A\33[J");// https://www.vt100.net/docs/vt100-ug/chapter3.html#S3.3.6
             }
+            $log = make_monolog("App::run_main");
             foreach ($files as $file) {
+                $log->info("full path: $file");
                 $file = App::is_dockerized() ? basename($file) : $file;
                 info("SAVED: $file");
             }

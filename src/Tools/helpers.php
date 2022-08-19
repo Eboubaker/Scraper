@@ -233,6 +233,7 @@ function normalize(string $path): string
 function logfile(?string $name = 'scrapper.log', bool $create_paths = false): string
 {
     if ($name == null) $name = 'scrapper.log';
+    if (App::is_dockerized()) return normalize('/downloads/' . $name);
     $p = rootpath('logs/' . $name);
     $parts = explode(DIRECTORY_SEPARATOR, $p);
     if ($create_paths && count($parts) > 1) {

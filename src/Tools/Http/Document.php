@@ -34,6 +34,11 @@ class Document
         $this->content = $content;
     }
 
+    public static function fromHtml(string $html, string $url): Document
+    {
+        return new Document($url, $url, $html);
+    }
+
     /**
      * @throws WebPageNotLoadedException
      */

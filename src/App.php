@@ -73,54 +73,6 @@ final class App
         });
     }
 
-    public static function run(array $args): int
-    {
-        try {
-            self::check_platform();
-            self::bootstrap($args);
-            self::registerShutDownHandler();
-            $exit_code = self::run_main();
-            self::$successfulTermination = true;
-            return $exit_code;
-        } catch (InvalidArgumentException $e) {// this is not \InvalidArgumentException, this extends Exceptions\UserException
-            echo TTY_FLUSH;
-            error($e->getMessage());
-            if ($e->getPrevious())
-                error("Cause: [{}]: {}", (new ReflectionClass($e))->getShortName(), $e->getPrevious()->getMessage());
-            tell("run with --help to see usage");
-            return $e->getCode();
-        } catch (UserException $e) {
-            echo TTY_FLUSH;
-            if ($e->getPrevious()) {
-                $className = function ($object): ?string {
-                    try {
-                        /** @noinspection PhpUnhandledExceptionInspection */
-                        return (new ReflectionClass($object))->getShortName();
-                    } catch (\Throwable $e) {
-                        return null;
-                    }
-                };
-                $str_cause = '';
-                $current = $e->getPrevious();
-                while ($current) {
-                    $str_cause .= "\n" . style("      * Caused by", 'red,bold') . ": " . $className($current) . ": " . $current->getMessage();
-                    $current = $current->getPrevious();
-                }
-                error($className($e) . ": " . $e->getMessage() . $str_cause);
-            } else {
-                error($e->getMessage());
-            }
-            return $e->getCode();
-        } catch (\Exception $e) {
-            echo TTY_FLUSH;
-            // display nice error message to console, or maybe bad??
-            if (debug_enabled()) dump_exception($e);
-            notice("Report issues to https://github.com/Eboubaker/Scrapper/issues");
-            error($e->getMessage());
-            return $e->getCode() !== 0 ? $e->getCode() : 100;
-        }
-    }
-
     /**
      * @throws InvalidArgumentException on invalid cli arguments
      */
@@ -161,16 +113,45 @@ final class App
     }
 
     /**
+     * is it running inside the docker image?
+     */
+    private static function is_dockerized(): bool
+    {
+        return !!getenv("SCRAPPER_DOCKERIZED");
+    }
+
+    /**
+     * make sure all required extensions are enabled
+     * @throws RequirementFailedException
+     */
+    private static function check_platform()
+    {
+//        if (!function_exists('opcache_get_status') || !opcache_get_status()) {
+//            throw new RequirementFailedException("zend opcache is not enabled, edit file " . php_ini_loaded_file() . " and enable both opcache.enable_cli and opcache.enable");
+//        }
+//        if (!extension_loaded('parallel')) {
+//            throw new RequirementFailedException("required php extension parallel is not installed: https://www.php.net/manual/en/book.parallel.php");
+//        }
+//        if (!extension_loaded('curl')) {
+//            throw new RequirementFailedException("required php extension curl is not enabled: modify php.ini and enable it: " . php_ini_loaded_file());
+//        }
+    }
+
+    /**
+     * @return bool was bootstrap() called?
+     */
+    public static function bootstrapped(): bool
+    {
+        return !!self::$bootstrapped;
+    }
+
+    /**
      * @throws UrlNotSupportedException
      * @throws InvalidArgumentException
      * @throws Exception
      */
     private static function run_main(): int
     {
-//        Document::fromUrl("https://www.youtube.com/watch?v=KH4u-cOANjo&ab_channel=QuickDev")->getJson();
-//        Document::fromUrl("https://www.facebook.com/photo/?fbid=516436823421503&set=gm.562356061828411")->getJson();
-//        Document::fromCache("476425ff443c91cc48f6e02458371987")->getJson();
-//        exit;
         // escape terminal escape char '\'
         $url = str_replace('\\', '', App::args()->getArg('url', ''));
         $url = trim($url);
@@ -223,36 +204,51 @@ final class App
         return 0;
     }
 
-    /**
-     * is it running inside the docker image?
-     */
-    private static function is_dockerized(): bool
+    public static function run(array $args): int
     {
-        return !!getenv("SCRAPPER_DOCKERIZED");
-    }
-
-    /**
-     * make sure all required extensions are enabled
-     * @throws RequirementFailedException
-     */
-    private static function check_platform()
-    {
-//        if (!function_exists('opcache_get_status') || !opcache_get_status()) {
-//            throw new RequirementFailedException("zend opcache is not enabled, edit file " . php_ini_loaded_file() . " and enable both opcache.enable_cli and opcache.enable");
-//        }
-//        if (!extension_loaded('parallel')) {
-//            throw new RequirementFailedException("required php extension parallel is not installed: https://www.php.net/manual/en/book.parallel.php");
-//        }
-//        if (!extension_loaded('curl')) {
-//            throw new RequirementFailedException("required php extension curl is not enabled: modify php.ini and enable it: " . php_ini_loaded_file());
-//        }
-    }
-
-    /**
-     * @return bool was bootstrap() called?
-     */
-    public static function bootstrapped(): bool
-    {
-        return !!self::$bootstrapped;
+        try {
+            self::check_platform();
+            self::bootstrap($args);
+            self::registerShutDownHandler();
+            $exit_code = self::run_main();
+            self::$successfulTermination = true;
+            return $exit_code;
+        } catch (InvalidArgumentException $e) {// this is not \InvalidArgumentException, this extends Exceptions\UserException
+            echo TTY_FLUSH;
+            error($e->getMessage());
+            if ($e->getPrevious())
+                error("Cause: [{}]: {}", (new ReflectionClass($e))->getShortName(), $e->getPrevious()->getMessage());
+            tell("run with --help to see usage");
+            return $e->getCode();
+        } catch (UserException $e) {
+            echo TTY_FLUSH;
+            if ($e->getPrevious()) {
+                $className = function ($object): ?string {
+                    try {
+                        /** @noinspection PhpUnhandledExceptionInspection */
+                        return (new ReflectionClass($object))->getShortName();
+                    } catch (\Throwable $e) {
+                        return null;
+                    }
+                };
+                $str_cause = '';
+                $current = $e->getPrevious();
+                while ($current) {
+                    $str_cause .= "\n" . style("      * Caused by", 'red,bold') . ": " . $className($current) . ": " . $current->getMessage();
+                    $current = $current->getPrevious();
+                }
+                error($className($e) . ": " . $e->getMessage() . $str_cause);
+            } else {
+                error($e->getMessage());
+            }
+            return $e->getCode();
+        } catch (\Exception $e) {
+            echo TTY_FLUSH;
+            // display nice error message to console, or maybe bad??
+            if (debug_enabled()) dump_exception($e);
+            notice("Report issues to https://github.com/Eboubaker/Scrapper/issues");
+            error($e->getMessage());
+            return $e->getCode() !== 0 ? $e->getCode() : 100;
+        }
     }
 }

@@ -65,11 +65,6 @@ class Optional
         return new static($value);
     }
 
-    public function isPresent(): bool
-    {
-        return null !== $this->value;
-    }
-
     /**
      * @param $value callable|mixed
      * @return mixed
@@ -83,6 +78,11 @@ class Optional
             return call_user_func($value);
         }
         return $value;
+    }
+
+    public function isPresent(): bool
+    {
+        return null !== $this->value;
     }
 
     /**

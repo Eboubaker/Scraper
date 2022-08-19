@@ -8,6 +8,7 @@ use Eboubaker\Scrapper\Contracts\Scrapper;
 use Eboubaker\Scrapper\Exception\ExpectationFailedException;
 use Eboubaker\Scrapper\Exception\NotImplementedException;
 use Eboubaker\Scrapper\Scrappers\Shared\ScrapperUtils;
+use Eboubaker\Scrapper\Tools\Cache\FS;
 use Eboubaker\Scrapper\Tools\Cache\Memory;
 use Eboubaker\Scrapper\Tools\CLI\ProgressIndicator;
 use Eboubaker\Scrapper\Tools\Http\Document;
@@ -230,24 +231,27 @@ final class YoutubeScrapper implements Scrapper
                     }
                 }
                 if (!isset($player_src_url)) {
-                    throw new ExpectationFailedException("Could not decode video signature");
+                    throw new ExpectationFailedException("Could not decode video signature, cause: player_src_url not found");
                 }
-                $client = new HttpClient([
-                    'timeout' => 60,
-                    'allow_redirects' => true,
-                    'verify' => false, // TODO: SSL
-                ]);
                 $this->log->debug("loading player source script: $player_src_url");
-                $player_src = $client->get($player_src_url, [
-                    ReqOpt::HEADERS => ScrapperUtils::make_curl_headers(),
-                ])->getBody()->getContents();
+                $player_src = FS::remember('player_src_' . $player_src_url, function () use ($player_src_url) {
+                    $this->log->debug("player source script is not in cache, downloading from: $player_src_url");
+                    $client = new HttpClient([
+                        'timeout' => 60,
+                        'allow_redirects' => true,
+                        'verify' => false, // TODO: SSL
+                    ]);
+                    return $client->get($player_src_url, [
+                        ReqOpt::HEADERS => ScrapperUtils::make_curl_headers(),
+                    ])->getBody()->getContents();
+                });
                 preg_match("/^.+?=(?<cipher>.+?)&.+?=(?<sig_query>.+?)&url=(?<url>.+)/", $stream_manifest['signatureCipher'], $matches);
                 $url = urldecode($matches['url']) . "&$matches[sig_query]=" . $this->decode_cipher($player_src, $matches['cipher']);
                 $this->log->debug("extracted url: $url");
                 return $url;
             } catch (Throwable $e) {
                 $this->log->error($e->getMessage());
-                $throw = $e;
+                throw new ExpectationFailedException("Could not decode video signature, cause: " . $e->getMessage(), $e);
             }
         }
         throw new ExpectationFailedException("stream url not found in stream manifest", $throw ?? null);

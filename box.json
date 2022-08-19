@@ -6,6 +6,12 @@
   ],
   "finder": [
     {
+      "in": "src",
+      "exclude": [
+        "tests"
+      ]
+    },
+    {
       "in": "vendor",
       "name": "LICENCE*"
     },

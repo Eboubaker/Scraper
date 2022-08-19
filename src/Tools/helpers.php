@@ -150,11 +150,13 @@ function bytes(string $format)
 }
 
 const H_SIZE_UNITS = array("B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"); //units of measurement
-function human_readable_size($bytes): string
+function human_readable_size($bytes, $decimals = 2, $max = 0): string
 {
     if ($bytes >= 1) {
         $base = floor(log($bytes) / log(1024));
-        return rtrim(rtrim(number_format(($bytes / pow(1024, $base)), 2) . " " . H_SIZE_UNITS[$base], '0'), '.');
+        if ($max && $base > $max) $base = $max;
+        $n = $bytes / pow(1024, $base);
+        return rtrim(rtrim(number_format($n, $decimals === -1 ? (intval($n) === $n ? 0 : $decimals) : $decimals) . " " . H_SIZE_UNITS[$base], '0'), '.');
     } else return "0 B";
 }
 

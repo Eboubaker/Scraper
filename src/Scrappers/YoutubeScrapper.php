@@ -83,8 +83,45 @@ final class YoutubeScrapper implements Scrapper
                 ->saveto($fname);
         };
         $useAdaptive = function () use ($document, $manifest, $useFormats, $adaptive_videos, $adaptive_audios, $formats, $fname) {
-            $video = $adaptive_videos->first();
-            $audio = $adaptive_audios->first();
+            $quality = App::args()->getOpt('quality');
+            if ($quality === 'highest') {
+                $video = $adaptive_videos->first();
+                $audio = $adaptive_audios->first();
+            } else if ($quality === "high") {
+                $video = Optional::ofNullable($adaptive_videos->filter(fn($v) => str_starts_with(data_get($v, 'quality', 'hd'), 'hd'))->reverse()->first())->orElse($adaptive_videos->first());
+                $audio = Optional::ofNullable($adaptive_audios->filter(fn($v) => data_get('bitrate', 0) <= 320_000)->first())->orElse($adaptive_audios->first());
+            } else if ($quality === "saver") {
+                $video = Optional::ofNullable($adaptive_videos->filter(fn($v) => str_starts_with(data_get($v, 'quality', 'hd'), 'hd'))->first())->orElse($adaptive_videos->first());
+                $audio = Optional::ofNullable($adaptive_audios->filter(fn($v) => strstr(data_get($v, 'quality', 'medium'), 'medium') !== false)->first())->orElse($adaptive_audios->first());
+            } else {// prompt
+                $writer = new \Ahc\Cli\Output\Writer;
+                $writer->write("Available video streams:\n");
+                $arr = $adaptive_videos->values();
+                $writer->table($arr->map(fn($v, $k) => [
+                    'Number' => $k,
+                    'Label' => $this->str_video_quality($v),
+                    'BitRate' => Optional::ofNullable(data_get($v, 'bitrate', null))->map(fn($v) => strtolower(human_readable_size($v, 0)) . "ps")->orElse('unknown'),
+                    'Size' => Optional::ofNullable(data_get($v, 'contentLength', null))->map(fn($v) => human_readable_size($v))->orElse('unknown')
+                ])->all());
+                $interactor = new \Ahc\Cli\IO\Interactor();
+                $quality = $interactor->choice("Select video stream", $arr->keys()->all());
+                if ($quality === null) {
+                    throw new ExpectationFailedException("No video stream selected");
+                }
+                $video = $arr->get($quality);
+                $arr = $adaptive_audios->values();
+                $writer->write("Available audio streams:\n");
+                $writer->table($arr->map(fn($v, $k) => [
+                    'Number' => $k,
+                    'BitRate' => Optional::ofNullable(data_get($v, 'bitrate', null))->map(fn($v) => strtolower(human_readable_size($v, 0)) . "ps")->orElse('unknown'),
+                    'Size' => Optional::ofNullable(data_get($v, 'contentLength', null))->map(fn($v) => human_readable_size($v))->orElse('unknown')
+                ])->all());
+                $quality = $interactor->choice("Select audio stream", $arr->keys()->all());
+                if ($quality === null) {
+                    throw new ExpectationFailedException("No audio stream selected");
+                }
+                $audio = $arr->get($quality);
+            }
             $ffmpeg = make_ffmpeg();
             if (!$ffmpeg) {
                 warn("This video has better sources ({}) but it has no sound and the video must be merged with the audio source, but ffmpeg is not installed", $this->str_video_quality($video));

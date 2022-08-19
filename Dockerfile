@@ -1,6 +1,6 @@
 FROM php:7.4-zts
 
-LABEL version=0.0.1
+LABEL version=0.1.0
 LABEL maintainer="Eboubaker Bekkouche"
 
 # Tell scrapper to always output to downloads directory, which the user should mount it as a volume

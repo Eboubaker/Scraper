@@ -51,7 +51,7 @@ ARGUMENTS
 
 ### Youtube scrapper
 
-- ◼ download video
+- ✅ download video
 - ◼ download playlist
 
 ### Instagram scrapper

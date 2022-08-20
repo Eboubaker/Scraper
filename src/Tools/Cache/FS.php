@@ -1,8 +1,8 @@
 <?php
 
-namespace Eboubaker\Scrapper\Tools\Cache;
+namespace Eboubaker\Scraper\Tools\Cache;
 
-use Eboubaker\Scrapper\Contracts\Cache;
+use Eboubaker\Scraper\Contracts\Cache;
 use RuntimeException;
 
 /**

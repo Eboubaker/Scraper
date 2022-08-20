@@ -1,8 +1,8 @@
 <?php
 
-namespace Eboubaker\Scrapper\Concerns;
+namespace Eboubaker\Scraper\Concerns;
 
-use Eboubaker\Scrapper\Exception\InvalidArgumentException;
+use Eboubaker\Scraper\Exception\InvalidArgumentException;
 use Garden\Cli\Args;
 use Garden\Cli\Cli;
 

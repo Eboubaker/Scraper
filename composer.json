@@ -1,6 +1,6 @@
 {
-  "name": "eboubaker/scrapper",
-  "description": "CLI based Web Media-Scrapper",
+  "name": "eboubaker/scraper",
+  "description": "CLI based Web Media-Scraper",
   "type": "project",
   "version": "0.1.0",
   "require": {
@@ -49,7 +49,7 @@
       "src/Tools/error_handler.php"
     ],
     "psr-4": {
-      "Eboubaker\\Scrapper\\": "src/"
+      "Eboubaker\\Scraper\\": "src/"
     }
   },
   "autoload-dev": {

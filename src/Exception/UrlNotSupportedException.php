@@ -1,6 +1,6 @@
 <?php
 
-namespace Eboubaker\Scrapper\Exception;
+namespace Eboubaker\Scraper\Exception;
 
 class UrlNotSupportedException extends UserException
 {

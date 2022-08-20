@@ -1,15 +1,15 @@
 <?php
 
-namespace Eboubaker\Scrapper\Tools\Http;
+namespace Eboubaker\Scraper\Tools\Http;
 
 use Eboubaker\JSON\JSONArray;
 use Eboubaker\JSON\JSONFinder;
-use Eboubaker\Scrapper\Concerns\WritesLogs;
-use Eboubaker\Scrapper\Exception\ExpectationFailedException;
-use Eboubaker\Scrapper\Exception\WebPageNotLoadedException;
-use Eboubaker\Scrapper\Extensions\Guzzle\EffectiveUrlMiddleware;
-use Eboubaker\Scrapper\Scrappers\Shared\ScrapperUtils;
-use Eboubaker\Scrapper\Tools\Cache\FS;
+use Eboubaker\Scraper\Concerns\WritesLogs;
+use Eboubaker\Scraper\Exception\ExpectationFailedException;
+use Eboubaker\Scraper\Exception\WebPageNotLoadedException;
+use Eboubaker\Scraper\Extensions\Guzzle\EffectiveUrlMiddleware;
+use Eboubaker\Scraper\Scrapers\Shared\ScraperUtils;
+use Eboubaker\Scraper\Tools\Cache\FS;
 use GuzzleHttp\Client as HttpClient;
 use GuzzleHttp\HandlerStack;
 use GuzzleHttp\RequestOptions as ReqOpt;
@@ -56,14 +56,14 @@ class Document
         ]);
         try {
             $response = $client->get($url, [
-                ReqOpt::HEADERS => ScrapperUtils::make_curl_headers(),
+                ReqOpt::HEADERS => ScraperUtils::make_curl_headers(),
                 ReqOpt::PROGRESS => fn($downloadTotal, $downloadedBytes) => printf(TTY_FLUSH . "       " . human_readable_size($downloadedBytes))
             ]);
             printf(TTY_FLUSH);
             $final_url = $response->getHeaderLine('X-GUZZLE-EFFECTIVE-URL');
             $html_document = $response->getBody()->getContents();
             $response_size = strlen($html_document);
-            make_monolog('ScrapperUtils')->debug("Response size: " . $response_size . "(" . human_readable_size($response_size) . ")");
+            make_monolog('ScraperUtils')->debug("Response size: " . $response_size . "(" . human_readable_size($response_size) . ")");
             if ($response_size === 0) {
                 throw new ExpectationFailedException("response size was 0");
             }

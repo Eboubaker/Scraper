@@ -1,7 +1,7 @@
 <?php /** @noinspection PhpUnnecessaryFullyQualifiedNameInspection,PhpFullyQualifiedNameUsageInspection */
 
-use Eboubaker\Scrapper\App;
-use Eboubaker\Scrapper\Tools\Cache\Memory;
+use Eboubaker\Scraper\App;
+use Eboubaker\Scraper\Tools\Cache\Memory;
 
 const TTY_UP = "\33[A";// https://www.vt100.net/docs/vt100-ug/chapter3.html#CUU
 const TTY_FLUSH = "\33[2K\r";
@@ -76,7 +76,7 @@ function style(string $text, ...$styles): string
 {
     if (!stream_isatty(STDOUT)) {
         // TODO: the parallel runtime doesn't know about this, the tracker thread will show the warning again.
-        \Eboubaker\Scrapper\Tools\Cache\FS::do_once('tty_colors_warned', function () {
+        \Eboubaker\Scraper\Tools\Cache\FS::do_once('tty_colors_warned', function () {
             fputs(STDOUT, "[WARN] STDOUT is not a TTY device, colors and styles are not supported.\n");
         });
         return $text;
@@ -230,9 +230,9 @@ function normalize(string $path): string
 /**
  * @author Eboubakkar Bekkouche <eboubakkar@gmail.com>
  */
-function logfile(?string $name = 'scrapper.log', bool $create_paths = false): string
+function logfile(?string $name = 'scraper.log', bool $create_paths = false): string
 {
-    if ($name == null) $name = 'scrapper.log';
+    if ($name == null) $name = 'scraper.log';
     if (App::is_dockerized()) return normalize('/downloads/' . $name);
     $p = rootpath('logs/' . $name);
     $parts = explode(DIRECTORY_SEPARATOR, $p);

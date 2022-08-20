@@ -1,6 +1,6 @@
 <?php /** @noinspection PhpMissingReturnTypeInspection */
 
-namespace Eboubaker\Scrapper\Extensions\Guzzle;
+namespace Eboubaker\Scraper\Extensions\Guzzle;
 
 use Closure;
 use Psr\Http\Message\RequestInterface;

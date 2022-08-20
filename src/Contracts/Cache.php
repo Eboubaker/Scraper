@@ -1,6 +1,6 @@
 <?php
 
-namespace Eboubaker\Scrapper\Contracts;
+namespace Eboubaker\Scraper\Contracts;
 
 /**
  * a cache store

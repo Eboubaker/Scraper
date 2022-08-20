@@ -89,9 +89,9 @@ function main(array $argv): int
 function make_release(string $name, string $rname, array $entries): string
 {
     echo "Generating release : $name" . PHP_EOL;
-    $release_container = normalize(dirname(__FILE__), "/releases/scrapper-$name-$rname");
-    $release_app_src = normalize("$release_container/scrapper");
-    $release_zip_output = normalize(dirname(__FILE__), "/releases/scrapper-$name-$rname.zip");
+    $release_container = normalize(dirname(__FILE__), "/releases/scraper-$name-$rname");
+    $release_app_src = normalize("$release_container/scraper");
+    $release_zip_output = normalize(dirname(__FILE__), "/releases/scraper-$name-$rname.zip");
 
     if (file_exists($release_container))
         throw new Exception("Release $rname already exists: $release_container");

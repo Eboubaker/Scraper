@@ -1,6 +1,6 @@
 <?php
 
-namespace Eboubaker\Scrapper\Tools;
+namespace Eboubaker\Scraper\Tools;
 
 use Closure;
 use RuntimeException;

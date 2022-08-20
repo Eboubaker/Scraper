@@ -1,6 +1,6 @@
 <?php
 
-namespace Eboubaker\Scrapper\Tools\CLI;
+namespace Eboubaker\Scraper\Tools\CLI;
 
 trait HasProgressBar
 {

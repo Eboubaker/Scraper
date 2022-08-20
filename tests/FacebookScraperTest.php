@@ -1,9 +1,9 @@
 <?php declare(strict_types=1);
 
-use Eboubaker\Scrapper\App;
+use Eboubaker\Scraper\App;
 use PHPUnit\Framework\TestCase;
 
-final class FacebookScrapperTest extends TestCase
+final class FacebookScraperTest extends TestCase
 {
     public function testCanScrapVideoSourcesInPost(): void
     {

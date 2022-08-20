@@ -1,19 +1,19 @@
 <?php declare(strict_types=1);
 
-namespace Eboubaker\Scrapper\Scrappers;
+namespace Eboubaker\Scraper\Scrapers;
 
-use Eboubaker\Scrapper\App;
-use Eboubaker\Scrapper\Concerns\WritesLogs;
-use Eboubaker\Scrapper\Contracts\Scrapper;
-use Eboubaker\Scrapper\Exception\ExpectationFailedException;
-use Eboubaker\Scrapper\Exception\NotImplementedException;
-use Eboubaker\Scrapper\Scrappers\Shared\ScrapperUtils;
-use Eboubaker\Scrapper\Tools\Cache\FS;
-use Eboubaker\Scrapper\Tools\Cache\Memory;
-use Eboubaker\Scrapper\Tools\CLI\ProgressIndicator;
-use Eboubaker\Scrapper\Tools\Http\Document;
-use Eboubaker\Scrapper\Tools\Http\ThreadedDownloader;
-use Eboubaker\Scrapper\Tools\Optional;
+use Eboubaker\Scraper\App;
+use Eboubaker\Scraper\Concerns\WritesLogs;
+use Eboubaker\Scraper\Contracts\Scraper;
+use Eboubaker\Scraper\Exception\ExpectationFailedException;
+use Eboubaker\Scraper\Exception\NotImplementedException;
+use Eboubaker\Scraper\Scrapers\Shared\ScraperUtils;
+use Eboubaker\Scraper\Tools\Cache\FS;
+use Eboubaker\Scraper\Tools\Cache\Memory;
+use Eboubaker\Scraper\Tools\CLI\ProgressIndicator;
+use Eboubaker\Scraper\Tools\Http\Document;
+use Eboubaker\Scraper\Tools\Http\ThreadedDownloader;
+use Eboubaker\Scraper\Tools\Optional;
 use Exception;
 use GuzzleHttp\Client as HttpClient;
 use GuzzleHttp\RequestOptions as ReqOpt;
@@ -23,9 +23,9 @@ use Tightenco\Collect\Support\Arr;
 /**
  * @author Eboubaker Bekkouche <eboubakkar@gmail.com>
  */
-final class YoutubeScrapper implements Scrapper
+final class YoutubeScraper implements Scraper
 {
-    use ScrapperUtils, WritesLogs;
+    use ScraperUtils, WritesLogs;
 
     public static function can_scrap(Document $document): bool
     {
@@ -182,7 +182,7 @@ final class YoutubeScrapper implements Scrapper
             // video in formats is better, no merge required
             return wrapIterable($useFormats());
         }
-//        throw new NotImplementedException("Youtube scrapper will be implemented very soon.");
+//        throw new NotImplementedException("Youtube scraper will be implemented very soon.");
     }
 
     private function str_video_quality(array $v): string
@@ -279,7 +279,7 @@ final class YoutubeScrapper implements Scrapper
                         'verify' => false, // TODO: SSL
                     ]);
                     return $client->get($player_src_url, [
-                        ReqOpt::HEADERS => ScrapperUtils::make_curl_headers(),
+                        ReqOpt::HEADERS => ScraperUtils::make_curl_headers(),
                     ])->getBody()->getContents();
                 });
                 preg_match("/^.+?=(?<cipher>.+?)&.+?=(?<sig_query>.+?)&url=(?<url>.+)/", $stream_manifest['signatureCipher'], $matches);

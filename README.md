@@ -1,10 +1,10 @@
-# Scrapper
+# Scraper
 
 With this tool you can download videos & images from popular websites.
 
 # Quickstart
 
-Download [latest windows release](https://github.com/Eboubaker/Scrapper/releases/latest).  
+Download [latest windows release](https://github.com/Eboubaker/Scraper/releases/latest).  
 for linux you can build the tool with composer.
 
 ### Docker
@@ -12,7 +12,7 @@ for linux you can build the tool with composer.
 an alternative is to run the tool with docker which will skip all requirements
 
 ```bash
-docker run -it --rm -v %cd%:/downloads eboubaker/scrapper <args>
+docker run -it --rm -v %cd%:/downloads eboubaker/scraper <args>
 ```
 
 > Replace `%cd%` with `$(pwd)` on linux.  
@@ -43,23 +43,23 @@ ARGUMENTS
 
 # RoadMap
 
-### Facebook scrapper
+### Facebook scraper
 
 - ✅ download image from a post url
 - ✅ download video from a post url
 
-### Reddit scrapper
+### Reddit scraper
 
 - ◼ download image from a post url
 - ◼ download video from a post url
 - ◼ download GIF as video from a post url
 
-### Youtube scrapper
+### Youtube scraper
 
 - ✅ download video
 - ◼ download playlist
 
-### Instagram scrapper
+### Instagram scraper
 
 - ◼ download image from a post url
 - ◼ download video from a post url

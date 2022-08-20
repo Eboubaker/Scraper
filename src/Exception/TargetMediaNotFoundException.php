@@ -1,6 +1,6 @@
 <?php
 
-namespace Eboubaker\Scrapper\Exception;
+namespace Eboubaker\Scraper\Exception;
 
 
 class TargetMediaNotFoundException extends UserException
@@ -9,6 +9,6 @@ class TargetMediaNotFoundException extends UserException
 
     public function __construct($message = "media not found", \Throwable $previous = null)
     {
-        parent::__construct($message . ", if the post is not public read https://github.com/Eboubaker/Scrapper/blob/master/docs/LOGIN.md", $previous);
+        parent::__construct($message . ", if the post is not public read https://github.com/Eboubaker/Scraper/blob/master/docs/LOGIN.md", $previous);
     }
 }

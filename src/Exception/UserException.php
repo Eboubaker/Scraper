@@ -1,6 +1,6 @@
 <?php
 
-namespace Eboubaker\Scrapper\Exception;
+namespace Eboubaker\Scraper\Exception;
 
 /**
  * last code: 20 {@link TargetMediaNotFoundException}

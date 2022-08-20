@@ -1,29 +1,29 @@
 <?php declare(strict_types=1);
 
-namespace Eboubaker\Scrapper\Scrappers;
+namespace Eboubaker\Scraper\Scrapers;
 
 use Eboubaker\JSON\Contracts\JSONEntry;
 use Eboubaker\JSON\JSONObject;
 use Eboubaker\JSON\JSONValue;
-use Eboubaker\Scrapper\Concerns\WritesLogs;
-use Eboubaker\Scrapper\Contracts\Scrapper;
-use Eboubaker\Scrapper\Exception\DownloadFailedException;
-use Eboubaker\Scrapper\Exception\ExpectationFailedException;
-use Eboubaker\Scrapper\Exception\TargetMediaNotFoundException;
-use Eboubaker\Scrapper\Exception\WebPageNotLoadedException;
-use Eboubaker\Scrapper\Scrappers\Shared\ScrapperUtils;
-use Eboubaker\Scrapper\Tools\Cache\Memory;
-use Eboubaker\Scrapper\Tools\Http\Document;
-use Eboubaker\Scrapper\Tools\Http\ThreadedDownloader;
-use Eboubaker\Scrapper\Tools\Optional;
+use Eboubaker\Scraper\Concerns\WritesLogs;
+use Eboubaker\Scraper\Contracts\Scraper;
+use Eboubaker\Scraper\Exception\DownloadFailedException;
+use Eboubaker\Scraper\Exception\ExpectationFailedException;
+use Eboubaker\Scraper\Exception\TargetMediaNotFoundException;
+use Eboubaker\Scraper\Exception\WebPageNotLoadedException;
+use Eboubaker\Scraper\Scrapers\Shared\ScraperUtils;
+use Eboubaker\Scraper\Tools\Cache\Memory;
+use Eboubaker\Scraper\Tools\Http\Document;
+use Eboubaker\Scraper\Tools\Http\ThreadedDownloader;
+use Eboubaker\Scraper\Tools\Optional;
 use Throwable;
 
 /**
  * @author Eboubaker Bekkouche <eboubakkar@gmail.com>
  */
-final class FacebookScrapper implements Scrapper
+final class FacebookScraper implements Scraper
 {
-    use ScrapperUtils, WritesLogs;
+    use ScraperUtils, WritesLogs;
 
     private const PATTERN_VIDEO_URL1 =
         /** @lang RegExp */

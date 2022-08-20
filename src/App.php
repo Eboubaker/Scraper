@@ -1,20 +1,20 @@
 <?php declare(strict_types=1);
 
-namespace Eboubaker\Scrapper;
+namespace Eboubaker\Scraper;
 
 use Closure;
-use Eboubaker\Scrapper\Concerns\ParsesAppArguments;
-use Eboubaker\Scrapper\Contracts\Scrapper;
-use Eboubaker\Scrapper\Exception\InvalidArgumentException;
-use Eboubaker\Scrapper\Exception\RequirementFailedException;
-use Eboubaker\Scrapper\Exception\UrlNotSupportedException;
-use Eboubaker\Scrapper\Exception\UserException;
-use Eboubaker\Scrapper\Scrappers\FacebookScrapper;
-use Eboubaker\Scrapper\Scrappers\RedditScrapper;
-use Eboubaker\Scrapper\Scrappers\YoutubeScrapper;
-use Eboubaker\Scrapper\Tools\Cache\FS;
-use Eboubaker\Scrapper\Tools\Cache\Memory;
-use Eboubaker\Scrapper\Tools\Http\Document;
+use Eboubaker\Scraper\Concerns\ParsesAppArguments;
+use Eboubaker\Scraper\Contracts\Scraper;
+use Eboubaker\Scraper\Exception\InvalidArgumentException;
+use Eboubaker\Scraper\Exception\RequirementFailedException;
+use Eboubaker\Scraper\Exception\UrlNotSupportedException;
+use Eboubaker\Scraper\Exception\UserException;
+use Eboubaker\Scraper\Scrapers\FacebookScraper;
+use Eboubaker\Scraper\Scrapers\RedditScraper;
+use Eboubaker\Scraper\Scrapers\YoutubeScraper;
+use Eboubaker\Scraper\Tools\Cache\FS;
+use Eboubaker\Scraper\Tools\Cache\Memory;
+use Eboubaker\Scraper\Tools\Http\Document;
 use Exception;
 use ReflectionClass;
 
@@ -88,7 +88,7 @@ final class App
 
         if (App::is_dockerized()) {
             if (!is_dir("/downloads")) {
-                notice("The app is running in docker, You need to mount a volume so downloads can be saved: \ndocker run -it -v /your/output/directory:/downloads eboubaker/scrapper ...");
+                notice("The app is running in docker, You need to mount a volume so downloads can be saved: \ndocker run -it -v /your/output/directory:/downloads eboubaker/scraper ...");
                 throw new InvalidArgumentException("Please mount a volume for the directory /downloads");
             } else {
                 Memory::cache_set('output_dir', "/downloads");
@@ -117,7 +117,7 @@ final class App
      */
     public static function is_dockerized(): bool
     {
-        return !!getenv("SCRAPPER_DOCKERIZED");
+        return !!getenv("SCRAPER_DOCKERIZED");
     }
 
     /**
@@ -164,30 +164,30 @@ final class App
         if ($url !== $document->getFinalUrl())
             notice("Final url was changed: {}", $document->getFinalUrl() ?? style("NULL", 'red'));
 //        info("attempting to determine which extractor to use");
-        /** @var $scrapper Scrapper */
-        $scrapper = null;
-        /** @var $available_scrappers Scrapper[]|string[] */
-        $available_scrappers = [
-            FacebookScrapper::class,
-            YoutubeScrapper::class,
-            RedditScrapper::class
+        /** @var $scraper Scraper */
+        $scraper = null;
+        /** @var $available_scrapers Scraper[]|string[] */
+        $available_scrapers = [
+            FacebookScraper::class,
+            YoutubeScraper::class,
+            RedditScraper::class
         ];
-        foreach ($available_scrappers as $class) {
+        foreach ($available_scrapers as $class) {
             if ($class::can_scrap($document)) {
-                $scrapper = new $class;
+                $scraper = new $class;
                 $cname = explode("\\", $class);
                 info("using " . end($cname));
                 break;
             }
         }
-        if (!$scrapper) {
-            // TODO: add pr request link for new scrapper
+        if (!$scraper) {
+            // TODO: add pr request link for new scraper
             warn("{} is probably not supported", $document->getFinalUrl());
             // TODO: add how to do login when it is implemented
             notice("if the post url is private you might need to login first");
             throw new UrlNotSupportedException("Could not determine which extractor to use");
         } else {
-            $files = $scrapper->scrap($document);
+            $files = $scraper->scrap($document);
             if (stream_isatty(STDOUT)) {
                 $linesCount = Memory::cache_get('stdout_written_lines_count');
                 // clear all previous written lines
@@ -248,7 +248,7 @@ final class App
             echo TTY_FLUSH;
             // display nice error message to console, or maybe bad??
             if (debug_enabled()) dump_exception($e);
-            notice("Report issues to https://github.com/Eboubaker/Scrapper/issues");
+            notice("Report issues to https://github.com/Eboubaker/Scraper/issues");
             error($e->getMessage());
             return $e->getCode() !== 0 ? $e->getCode() : 100;
         }

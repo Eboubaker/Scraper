@@ -1,14 +1,14 @@
 <?php declare(strict_types=1);
 
-namespace Eboubaker\Scrapper\Contracts;
+namespace Eboubaker\Scraper\Contracts;
 
-use Eboubaker\Scrapper\Tools\Http\Document;
+use Eboubaker\Scraper\Tools\Http\Document;
 
 /**
- * all scrappers shall implement this contract
+ * all scrapers shall implement this contract
  * @author Eboubaker Bekkouche <eboubakkar@gmail.com>
  */
-interface Scrapper
+interface Scraper
 {
     /**
      * download the media(s) in the document, should return the list of filenames
@@ -18,7 +18,7 @@ interface Scrapper
 
 
     /**
-     * returns true if the url can be handled by the scrapper.
+     * returns true if the url can be handled by the scraper.
      * The function should return a boolean and should not raise any exceptions and should not produce any side effects.
      */
     // #[\JetBrains\PhpStorm\Pure]

@@ -1,6 +1,6 @@
 <?php declare(strict_types=1);
 
-namespace Eboubaker\Scrapper\Concerns;
+namespace Eboubaker\Scraper\Concerns;
 
 use Psr\Log\LoggerInterface;
 use ReflectionClass;

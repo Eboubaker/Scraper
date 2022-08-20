@@ -3,8 +3,8 @@ FROM php:7.4-zts
 LABEL version=0.1.0
 LABEL maintainer="Eboubaker Bekkouche"
 
-# Tell scrapper to always output to downloads directory, which the user should mount it as a volume
-ENV SCRAPPER_DOCKERIZED=1
+# Tell scraper to always output to downloads directory, which the user should mount it as a volume
+ENV SCRAPER_DOCKERIZED=1
 
 RUN apt-get update && \
     apt-get install -y ca-certificates apt-utils && \

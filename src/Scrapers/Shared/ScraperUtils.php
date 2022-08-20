@@ -1,18 +1,18 @@
 <?php declare(strict_types=1);
 
-namespace Eboubaker\Scrapper\Scrappers\Shared;
+namespace Eboubaker\Scraper\Scrapers\Shared;
 
-use Eboubaker\Scrapper\App;
-use Eboubaker\Scrapper\Exception\InvalidArgumentException;
-use Eboubaker\Scrapper\Extensions\FFMpeg\X264;
-use Eboubaker\Scrapper\Tools\Cache\Memory;
+use Eboubaker\Scraper\App;
+use Eboubaker\Scraper\Exception\InvalidArgumentException;
+use Eboubaker\Scraper\Extensions\FFMpeg\X264;
+use Eboubaker\Scraper\Tools\Cache\Memory;
 use Exception;
 use FFMpeg\Media\Video;
 
 /**
  * @author Eboubaker Bekkouche <eboubakkar@gmail.com>
  */
-trait ScrapperUtils
+trait ScraperUtils
 {
     /**
      * @throws InvalidArgumentException

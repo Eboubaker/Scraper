@@ -21,15 +21,20 @@ docker run -it --rm -v %cd%:/downloads eboubaker/scrapper <args>
 USAGE
 
 ```
-usage: scrap [<options>] [<args>]
+usage: scrap.php [<options>] [<args>]
 
 Download media from a post url
 
 OPTIONS
-  --header, -h    Add a header to the request (like Cookie), can be repeated
+  --header, -H    Add a header to the request (like Cookie), can be repeated
   --help, -?      Display this help.
   --output, -o    set output directory, default is current working directory
-  --verbose, -v   display more useful information
+  --quality, -q   default: prompt, for videos only, changes quality selection
+                  behavior, allowed values: prompt,highest,high,saver where
+                  highest chooses the highest quality regardless of size, high
+                  will pick the best quality and will consider video size, saver
+                  will try to pick a lower size video
+  --verbose, -v   display more useful information while running
   --version       show version
 
 ARGUMENTS

@@ -188,12 +188,12 @@ final class App
             throw new UrlNotSupportedException("Could not determine which extractor to use");
         } else {
             $files = $scraper->scrap($document);
-            if (stream_isatty(STDOUT)) {
-                $linesCount = Memory::cache_get('stdout_written_lines_count');
-                // clear all previous written lines
-                // TODO: maybe we should keep the lines as log for the user
-                fwrite(STDOUT, "\33[{$linesCount}A\33[J");// https://www.vt100.net/docs/vt100-ug/chapter3.html#S3.3.6
-            }
+//            if (stream_isatty(STDOUT)) {
+//                $linesCount = Memory::cache_get('stdout_written_lines_count');
+//                // clear all previous written lines
+//                // TODO: maybe we should keep the lines as log for the user
+//                fwrite(STDOUT, "\33[{$linesCount}A\33[J");// https://www.vt100.net/docs/vt100-ug/chapter3.html#S3.3.6
+//            }
             $log = make_monolog("App::run_main");
             foreach ($files as $file) {
                 $log->info("full path: $file");

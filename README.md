@@ -50,9 +50,9 @@ ARGUMENTS
 
 ### Reddit scraper
 
-- ◼ download image from a post url
-- ◼ download video from a post url
-- ◼ download GIF as video from a post url
+- [ ] download image from a post url
+- [ ] download video from a post url
+- [ ] download GIF as video from a post url
 
 ### Youtube scraper
 
@@ -70,4 +70,5 @@ ARGUMENTS
 
 - [x] download tiktok video
 
-### [ ] Make a web interface.
+### Make a web interface.
+- [ ] [online] paste post link and get download link(s)

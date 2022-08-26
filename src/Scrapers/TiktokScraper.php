@@ -51,9 +51,9 @@ final class TiktokScraper implements Scraper
             ->orElse('Unknown');
         $author_name = $module->mapOnce(fn(array $v) => is_string(data_get($v, 'nickname')) ? "(" . data_get($v, 'nickname') . ")" : null)
             ->orElse('');
-        $fname = "[Ticktok] @$author_uname$author_name Video [$id]";
+        $fname = "[Tiktok] @$author_uname$author_name Video [$id]";
         $fname = normalize(Memory::cache_get('output_dir') . "/" . filter_filename($fname) . ".mp4");
-
+        info("Downloading @$author_uname$author_name Video [$id]");
         return wrapIterable(ThreadedDownloader::for($download_url, 'tiktok' . $id)
             ->validate()
             ->saveto($fname));

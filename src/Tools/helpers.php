@@ -404,10 +404,11 @@ function random_name($directory, $prefix = '', $ext = null): string
 }
 
 /**
+ * wrap the value in an array if it is not iterable.
  * @param $value
- * @return array|iterable
+ * @return iterable
  */
-function wrapIterable($value)
+function wrapIterable($value): iterable
 {
     if (is_array($value) || is_iterable($value)) {
         return $value;

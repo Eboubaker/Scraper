@@ -2,7 +2,7 @@
   "name": "eboubaker/scraper",
   "description": "CLI based Web Media-Scraper",
   "type": "project",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "require": {
     "php": ">=7.4",
     "ext-json": "*",

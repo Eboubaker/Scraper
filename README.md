@@ -45,8 +45,8 @@ ARGUMENTS
 
 ### Facebook scraper
 
-- ✅ download image from a post url
-- ✅ download video from a post url
+- [x] download image from a post url
+- [x] download video from a post url
 
 ### Reddit scraper
 
@@ -56,14 +56,18 @@ ARGUMENTS
 
 ### Youtube scraper
 
-- ✅ download video
-- ◼ download playlist
+- [x] download video
+- [ ] download playlist
 
 ### Instagram scraper
 
-- ◼ download image from a post url
-- ◼ download video from a post url
-- ◼ download video from a story
-- ◼ download image from a story
+- [ ] download image from a post url
+- [ ] download video from a post url
+- [ ] download video from a story
+- [ ] download image from a story
 
-### ◼ Make a web interface.
+### Tiktok scraper
+
+- [x] download tiktok video
+
+### [ ] Make a web interface.

@@ -65,7 +65,7 @@ final class FacebookScraper implements Scraper
      * @throws ExpectationFailedException
      * @throws Throwable
      */
-    function scrap(Document $document)
+    function scrap(Document $document): iterable
     {
         if ($document->getContentLength() < bytes('300kb')) {
             warn("Response size is too small: {}, this probably indicates facebook redirected you to the login page, please read docs/login.md", style(human_readable_size($document->getContentLength()), 'red'));

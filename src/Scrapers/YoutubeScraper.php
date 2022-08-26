@@ -45,7 +45,7 @@ final class YoutubeScraper implements Scraper
      * @throws Exception
      * @throws Throwable
      */
-    function scrap(Document $document)
+    function scrap(Document $document): iterable
     {
         $manifest = Optional::ofNullable($document->getObjects()->search([
             "streamingData.formats",
@@ -78,7 +78,7 @@ final class YoutubeScraper implements Scraper
             }
             $url = $this->get_stream_url($video, $document);
             info("Downloading Video {}", style($this->str_video_quality($video), 'blue'));
-            return ThreadedDownloader::for($url, '')
+            return ThreadedDownloader::for($url, $document->getFinalUrl() . "-formats-" . data_get($video, 'itag'))
                 ->validate()
                 ->saveto($fname);
         };
@@ -151,12 +151,12 @@ final class YoutubeScraper implements Scraper
                 try {
                     info("Downloading Video {}", style($this->str_video_quality($video), 'blue'));
                     $vfile = random_name(Memory::cache_get('output_dir'), 'stream-', 'mp4');// might not be mp4, but anyways..
-                    $vdownloader = ThreadedDownloader::for($video_url, $document->getFinalUrl())
+                    $vdownloader = ThreadedDownloader::for($video_url, $document->getFinalUrl() . "-adaptive-video" . data_get($video, 'itag'))
                         ->with_headers($headers)
                         ->validate();
                     App::terminating(fn() => file_exists($vfile) && @unlink($vfile));
                     $afile = random_name(Memory::cache_get('output_dir'), 'stream-', 'mp3');
-                    $adownloader = ThreadedDownloader::for($audio_url, $document->getFinalUrl())
+                    $adownloader = ThreadedDownloader::for($audio_url, $document->getFinalUrl() . "-adaptive-audio-" . data_get($video, 'itag'))
                         ->with_headers($headers)
                         ->validate();
                     App::terminating(fn() => file_exists($afile) && @unlink($afile));

@@ -11,6 +11,7 @@ use Eboubaker\Scraper\Exception\UrlNotSupportedException;
 use Eboubaker\Scraper\Exception\UserException;
 use Eboubaker\Scraper\Scrapers\FacebookScraper;
 use Eboubaker\Scraper\Scrapers\RedditScraper;
+use Eboubaker\Scraper\Scrapers\TiktokScraper;
 use Eboubaker\Scraper\Scrapers\YoutubeScraper;
 use Eboubaker\Scraper\Tools\Cache\FS;
 use Eboubaker\Scraper\Tools\Cache\Memory;
@@ -81,7 +82,7 @@ final class App
         // parse arguments
         App::$arguments = self::parse_arguments($args);
         // show version and exit if requested version option.
-        if (App::args()->getOpt('version')) die("v0.1.0" . PHP_EOL);
+        if (App::args()->getOpt('version')) die("v0.1.1" . PHP_EOL);
 
         // make logs directory if not exists
         if (!file_exists(dirname(logfile()))) mkdir(dirname(logfile()));
@@ -170,7 +171,8 @@ final class App
         $available_scrapers = [
             FacebookScraper::class,
             YoutubeScraper::class,
-            RedditScraper::class
+            RedditScraper::class,
+            TiktokScraper::class,
         ];
         foreach ($available_scrapers as $class) {
             if ($class::can_scrap($document)) {

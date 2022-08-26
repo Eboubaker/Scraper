@@ -34,6 +34,9 @@ final class App
 
     private static bool $successfulTermination = false;
 
+    /**
+     * Add a task to be executed before the app exits
+     */
     public static function terminating(Closure $task, string $key = null): void
     {
         if (!empty($key)) {
@@ -43,6 +46,9 @@ final class App
         }
     }
 
+    /**
+     * remove a previously registered termination task
+     */
     public static function terminatingUnregister(Closure ...$tasks): void
     {
         foreach ($tasks as $task) {
@@ -53,6 +59,10 @@ final class App
         }
     }
 
+    /**
+     * Add a task to be executed before the app exits without errors
+     * @param Closure $task
+     */
     public static function onSuccessfulTermination(Closure $task): void
     {
         self::$before_shutdown_tasks[] = fn() => self::$successfulTermination && call_user_func($task);
@@ -84,9 +94,6 @@ final class App
         // show version and exit if requested version option.
         if (App::args()->getOpt('version')) die("v0.1.1" . PHP_EOL);
 
-        // make logs directory if not exists
-        if (!file_exists(dirname(logfile()))) mkdir(dirname(logfile()));
-
         if (App::is_dockerized()) {
             if (!is_dir("/downloads")) {
                 notice("The app is running in docker, You need to mount a volume so downloads can be saved: \ndocker run -it -v /your/output/directory:/downloads eboubaker/scraper ...");
@@ -102,7 +109,8 @@ final class App
                 Memory::cache_set('output_dir', realpath(normalize($dir)));
             }
         }
-
+        // make logs directory if not exists
+        if (!file_exists(dirname(logfile()))) mkdir(dirname(logfile()));
 
         // disable pcre jit because we are dealing with big chunks of text
         ini_set("pcre.jit", '0');

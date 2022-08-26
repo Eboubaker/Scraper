@@ -94,6 +94,7 @@ final class YoutubeScraper implements Scraper
                 $video = Optional::ofNullable($adaptive_videos->filter(fn($v) => str_starts_with(data_get($v, 'quality', 'hd'), 'hd'))->first())->orElse($adaptive_videos->first());
                 $audio = Optional::ofNullable($adaptive_audios->filter(fn($v) => strstr(data_get($v, 'quality', 'medium'), 'medium') !== false)->first())->orElse($adaptive_audios->first());
             } else {// prompt
+                notice("--quality option not specified, manual selection required.");
                 $writer = new \Ahc\Cli\Output\Writer;
                 $writer->write("Available video streams:\n");
                 $arr = $adaptive_videos->values();

@@ -1,8 +1,5 @@
 FROM php:7.4-zts
 
-LABEL version=0.1.1
-LABEL maintainer="Eboubaker Bekkouche"
-
 # Tell scraper to always output to downloads directory, which the user should mount it as a volume
 ENV SCRAPER_DOCKERIZED=1
 
@@ -23,6 +20,11 @@ RUN php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');" &&
     php -r "unlink('composer-setup.php');" && \
     mv composer.phar /usr/local/bin/composer
 
+
+RUN apt-get remove -y software-properties-common apt-utils
+RUN apt autoremove --purge -y
+RUN apt-get clean
+
 COPY composer* /app/
 COPY src /app/src
 COPY LICENSE.txt /app/
@@ -31,9 +33,11 @@ RUN mkdir /downloads
 WORKDIR /app
 RUN composer install --no-dev
 RUN rm -rf /tmp/**
-
-RUN apt-get remove -y apt-utils software-properties-common git unzip
+RUN apt-get remove -y git unzip
 RUN apt autoremove --purge -y
 RUN apt-get clean
+
+LABEL version=0.1.2
+LABEL maintainer="Eboubaker Bekkouche"
 
 ENTRYPOINT ["php", "src/scrap.php"]

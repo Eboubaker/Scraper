@@ -57,6 +57,8 @@ function debug(string $msg, ...$args)
 
 
 /**
+ * if a php Error/Warning happens while running the action then print it to the console.
+ * restores the previous error_handler afterwards.
  * @param Closure<bool> $closure
  * @return bool
  */
@@ -194,25 +196,44 @@ function running_as_phar(): bool
 /**
  * get path to the project root,
  * if running as phar then return the directory of the phar file.
+ * if running on docker return the mounted volume.
  * @throws Error
  * @author Eboubakkar Bekkouche <eboubakkar@gmail.com>
  */
-function rootpath(string $append = ''): string
+function rootpath(string $append = '', bool $check_docker = true): string
 {
-    $dir = Memory::remember('internals.root-path', function () {
+    $dir = Memory::remember('internals.root-path.' . $check_docker, function () use ($check_docker) {
+        if ($check_docker && App::is_dockerized()) {
+            $p = realpath(Memory::cache_get('output_dir'));
+            if (!$p) throw new Error("running on docker and could not resolve root path, maybe did not mount /downloads volume?");
+            $p = normalize($p . '/docker-scraper-data');
+            if (!file_exists($p)) {
+                try {
+                    if (!mkdir($p, 0600)) {
+                        throw new RuntimeException("mkdir($p, 0600) did not succeed");
+                    }
+                    if (!file_exists($p . DIRECTORY_SEPARATOR . "README.txt")) {
+                        file_put_contents($p . DIRECTORY_SEPARATOR . "README.txt", "This directory contains the scrapper data, such as logs/caches when running the docker image eboubaker/scraper" . PHP_EOL);
+                    }
+                } catch (\Throwable $original) {
+                    throw new Error("running on docker and could not create data path, maybe did not mount /downloads volume?", $original->getCode(), $original);
+                }
+            }
+            return $p;
+        }
         $dir = dirname(Phar::running(false));
         if (!$dir) {
             $dir = realpath(__DIR__);
             $tries = 5;
             // the root is where vendor sits
-            while (!file_exists(normalize($dir . '/vendor')) && --$tries != 0)
+            while (!file_exists(normalize($dir . '/vendor')) && --$tries != 0)// TODO: not a good idea, they may have /vendor for other purposes
                 $dir = dirname($dir);
-            if ($tries == 0) throw new Error("root path not resolved");
+            if ($tries == 0) throw new Error("root path not resolved /vendor directory not found");
         }
         return $dir;
     });
-    $append = normalize($append);
-    return $dir . putif($append !== '', DIRECTORY_SEPARATOR . $append);
+
+    return normalize($dir . putif($append !== '', DIRECTORY_SEPARATOR . $append));
 }
 
 
@@ -233,7 +254,6 @@ function normalize(string $path): string
 function logfile(?string $name = 'scraper.log', bool $create_paths = false): string
 {
     if ($name == null) $name = 'scraper.log';
-    if (App::is_dockerized()) return normalize('/downloads/' . $name);
     $p = rootpath('logs/' . $name);
     $parts = explode(DIRECTORY_SEPARATOR, $p);
     if ($create_paths && count($parts) > 1) {
@@ -414,4 +434,25 @@ function wrapIterable($value): iterable
         return $value;
     }
     return [$value];
+}
+
+/**
+ * on docker return the local tmp path
+ * @return string|void
+ */
+function get_temp_dir()
+{
+    if (App::is_dockerized()) {
+        $p = rootpath('tmp');
+        if (!file_exists($p)) {
+            try {
+                if (!mkdir($p, 0600)) throw new Error("failed to create tmp dir");
+            } catch (\Throwable $original) {
+                throw new Error("failed to create tmp dir", $original->getCode(), $original);
+            }
+        }
+        return $p;
+    } else {
+        return sys_get_temp_dir();
+    }
 }

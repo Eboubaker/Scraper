@@ -131,11 +131,17 @@ final class ThreadedDownloader
          */
         $workers = new Collection();
         if (running_as_phar()) {
-            $vendor_dir = Phar::running(true) . "/vendor/autoload.php";
+            $composer_auto_loader = Phar::running(true) . "/vendor/autoload.php";
         } else {
-            $vendor_dir = rootpath('/vendor/autoload.php');
+            $composer_auto_loader = rootpath('/vendor/autoload.php', false);
         }
-        $makeRuntime = fn() => new Runtime($vendor_dir);
+        $makeRuntime = function () use ($composer_auto_loader) {
+            try {
+                return new Runtime($composer_auto_loader);
+            } catch (\Throwable $original) {
+                throw new \RuntimeException("could not create parallel runtime, autoloader path was: " . $composer_auto_loader, $original->getCode(), $original);
+            }
+        };
         {// allocate the required space for the output or fail
             if (!wrap_warnings(function () use ($file_name) {
                 $res = fopen($file_name, 'w+b');
@@ -146,15 +152,19 @@ final class ThreadedDownloader
                 return $success;
             })) {
                 @unlink($file_name);
-                throw new FileSystemException("could not create temporary output file $file_name");
+                throw new FileSystemException("could not create required space to download the resource in the file $file_name");
             }
         }
         @unlink($file_name);
-        $tracker = $makeRuntime()->run($this->make_tracker_task(), [
-            "Tracker",
-            $this->workers_count,
-            $this->resource_size
-        ]);
+        try {
+            $tracker = $makeRuntime()->run($this->make_tracker_task(), [
+                "Tracker",
+                $this->workers_count,
+                $this->resource_size
+            ]);
+        } catch (\Throwable $original) {
+            throw new \RuntimeException("could not run a parallel task 'Download Tracker', extension 'ext-parallel' might be installed incorrectly", $original->getCode(), $original);
+        }
         App::terminating($trackerShutdown = function () use ($tracker) {
             if (isset($tracker) && !$tracker->done()) {
                 $this->log->debug("post-termination: forcefully terminating tracker");
@@ -165,7 +175,7 @@ final class ThreadedDownloader
         $parts = FS::cache_get($part_locations_cache_key, []);
         if (empty($parts)) {
             for ($i = 0; $i < $this->workers_count; $i++) {
-                $parts[] = tempnam(sys_get_temp_dir(), 'scr');
+                $parts[] = tempnam(get_temp_dir(), 'scr');
             }
             FS::cache_set($part_locations_cache_key, $parts);
         } else {

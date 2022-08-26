@@ -67,9 +67,9 @@ class FS implements Cache
         self::$__cache_dir = rootpath('cache');
         if (!file_exists(self::$__cache_dir)) {
             if (!mkdir(self::$__cache_dir, 0600, true)) {
-                debug("Failed to create cache directory: " . self::$__cache_dir);
+                error("Failed to create cache directory: " . self::$__cache_dir);
             }
-            @file_put_contents(self::$__cache_dir . '/README.txt', 'This is a cache directory for the app. unused caches are cleaned by the app automatically.');
+            @file_put_contents(self::$__cache_dir . DIRECTORY_SEPARATOR . 'README.txt', 'This is a cache directory for the app. unused caches are cleaned by the app automatically.' . PHP_EOL);
         }
         return self::$__cache_dir;
     }

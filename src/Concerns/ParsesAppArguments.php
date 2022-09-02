@@ -39,6 +39,15 @@ trait ParsesAppArguments
         if (!in_array($args->getOpt('quality'), ['prompt', 'highest', 'high', 'saver'])) {
             throw new InvalidArgumentException("Validation failed for option 'quality': option must be one of prompt, highest, high, saver");
         }
+        foreach ($args->getOpt('header', []) as $cli_header) {
+            if (preg_match("/^(.+?):\s*?(.+)$/", $cli_header, $matches)) {
+                $key = $matches[1];
+                $value = $matches[2];
+                $headers[$key] = $value;
+            } else {
+                warn("Validation failed for option 'header': Invalid header format: $cli_header");
+            }
+        }
         return $args;
     }
 }

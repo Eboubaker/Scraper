@@ -1,18 +1,15 @@
 <?php declare(strict_types=1);
 
-namespace Eboubaker\Scraper\Scrapers\Shared;
+namespace Eboubaker\Scraper\Tools\Http;
 
 use Eboubaker\Scraper\App;
 use Eboubaker\Scraper\Exception\InvalidArgumentException;
-use Eboubaker\Scraper\Extensions\FFMpeg\X264;
 use Eboubaker\Scraper\Tools\Cache\Memory;
-use Exception;
-use FFMpeg\Media\Video;
 
 /**
  * @author Eboubaker Bekkouche <eboubakkar@gmail.com>
  */
-trait ScraperUtils
+class CurlHttp
 {
     /**
      * @throws InvalidArgumentException
@@ -46,32 +43,9 @@ trait ScraperUtils
                     $key = $matches[1];
                     $value = $matches[2];
                     $headers[$key] = $value;
-                } else {
-                    throw new InvalidArgumentException("Invalid header: $cli_header");
                 }
             }
             return $headers;
         });
-    }
-
-    /**
-     * returns the path to the temporary merged video,
-     * the file should be cleaned after copying or on errors.
-     * @throws Exception|\FFMpeg\Exception\InvalidArgumentException|\FFMpeg\Exception\RuntimeException
-     * @noinspection PhpFullyQualifiedNameUsageInspection
-     */
-    function merge_video_with_audio(string $video_source, string $audio_source, string $output, \Closure $on_progress = null): void
-    {
-        $ffmpeg = make_ffmpeg();
-        /** @var $vid Video */
-        $vid = $ffmpeg->open($video_source);
-        $vid->addFilter(new \FFMpeg\Filters\Audio\SimpleFilter(array('-i', $audio_source, '-shortest')));
-        $format = new X264();
-        $format->setVideoCodec('copy');
-        $format->setKiloBitrate(0);
-        if ($on_progress) {
-            $format->on('progress', fn($video, $format, $percentage) => $on_progress($percentage, $video, $format));
-        }
-        $vid->save($format, $output);
     }
 }

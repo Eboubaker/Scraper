@@ -2,6 +2,8 @@
 
 namespace Eboubaker\Scraper\Scrapers;
 
+use Ahc\Cli\IO\Interactor;
+use Ahc\Cli\Output\Writer;
 use Eboubaker\JSON\Contracts\JSONEntry;
 use Eboubaker\JSON\JSONObject;
 use Eboubaker\JSON\JSONValue;
@@ -11,7 +13,6 @@ use Eboubaker\Scraper\Exception\DownloadFailedException;
 use Eboubaker\Scraper\Exception\ExpectationFailedException;
 use Eboubaker\Scraper\Exception\TargetMediaNotFoundException;
 use Eboubaker\Scraper\Exception\WebPageNotLoadedException;
-use Eboubaker\Scraper\Scrapers\Shared\ScraperUtils;
 use Eboubaker\Scraper\Tools\Cache\Memory;
 use Eboubaker\Scraper\Tools\Http\Document;
 use Eboubaker\Scraper\Tools\Http\ThreadedDownloader;
@@ -23,7 +24,7 @@ use Throwable;
  */
 final class FacebookScraper implements Scraper
 {
-    use ScraperUtils, WritesLogs;
+    use WritesLogs;
 
     private const PATTERN_VIDEO_URL1 =
         /** @lang RegExp */
@@ -46,6 +47,9 @@ final class FacebookScraper implements Scraper
     private const PATTERN_GROUP_POST2 =
         /** @lang RegExp */
         "/https?:\/\/.{1,3}\.facebook\.com\/groups\/(?<group_id>[^\/]+)\/posts\/(?<post_id>\d+)/";
+    private const PATTERN_PROFILE_STORY1 =
+        /** @lang RegExp */
+        "#https?://.{1,3}\.facebook\.com/stories/(?<bucket_id>[^/]+)/(?<encoded>[^?&/]+)#";
 
     public static function can_scrap(Document $document): bool
     {
@@ -55,7 +59,8 @@ final class FacebookScraper implements Scraper
             || preg_match(self::PATTERN_IMAGE_URL1, $document->getFinalUrl())
             || preg_match(self::PATTERN_IMAGE_URL2, $document->getFinalUrl())
             || preg_match(self::PATTERN_GROUP_POST1, $document->getFinalUrl())
-            || preg_match(self::PATTERN_GROUP_POST2, $document->getFinalUrl());
+            || preg_match(self::PATTERN_GROUP_POST2, $document->getFinalUrl())
+            || preg_match(self::PATTERN_PROFILE_STORY1, $document->getFinalUrl());
     }
 
     /**
@@ -80,6 +85,8 @@ final class FacebookScraper implements Scraper
         } else if (preg_match(self::PATTERN_IMAGE_URL1, $document->getFinalUrl(), $matches)
             || preg_match(self::PATTERN_IMAGE_URL2, $document->getFinalUrl(), $matches)) {
             return wrapIterable($this->download_image($document, $matches['image_id']));
+        } else if (preg_match(self::PATTERN_PROFILE_STORY1, $document->getFinalUrl(), $matches)) {
+            return wrapIterable($this->download_story($document, $matches['bucket_id']));
         } else if (preg_match(self::PATTERN_GROUP_POST1, $document->getFinalUrl(), $matches)
             || preg_match(self::PATTERN_GROUP_POST2, $document->getFinalUrl(), $matches)) {
             $result = $document->getObjects()->getAll(
@@ -146,6 +153,83 @@ final class FacebookScraper implements Scraper
             ->setWorkers(8)
             ->validate()
             ->saveto($fname);
+    }
+
+    /**
+     * @throws TargetMediaNotFoundException
+     * @throws ExpectationFailedException
+     * @throws Throwable
+     */
+    private function download_story(Document $document, string $id): array
+    {
+        $bucket = Optional::ofNullable(
+            $document->getObjects()->getAll(
+                '**.bucket',
+                fn($v) => $v instanceof JSONObject && $v->get('id') !== null && $v->get('id')->matches("/$id/")
+            )[0] ?? null
+        )->map(fn($v) => $v->assoc());
+        $attachments = $bucket
+            ->map(fn($v) => data_get($v, 'unified_stories.edges'))
+            ->map(fn($v) => array_map(fn($vv) => data_get($vv, 'node.attachments'), $v))
+            ->map(fn($v) => array_merge(...array_values($v)))// flatten
+            ->map(fn($v) => array_map(fn($vv) => data_get($vv, 'media'), $v))
+            ->map(fn($v) => array_filter($v)) // not null
+            ->map(fn($v) => array_filter($v, fn($v) => data_get($v, '__typename') === "Video" || data_get($v, '__typename') === "Photo"))
+            ->map(fn($v) => count($v) === 0 ? null : $v)
+            ->orElseThrow(fn() => new TargetMediaNotFoundException("No media elements found in this story bucket, story might be no longer available"));
+        if (count($attachments) > 1) {
+            $i = new Interactor();
+            (new Writer())->table(array_map(function ($v, $k) {
+                if ($this->is_image($v)) {
+                    $description = data_get($v, 'accessibility_caption', '');
+                } else {
+                    $description = data_get($v, 'width') . "X" . data_get($v, 'height');
+                }
+                return [
+                    'Number' => $k + 1,
+                    'Type' => data_get($v, '__typename', 'Unknown'),
+                    'Description' => $description,
+                ];
+            }, $attachments, array_keys($attachments)));
+            info("More than 1 media was found in the story, specify which attachments to download, separate input numbers by comma ','");
+            $attachments = $i->prompt("Which attachments to download?(All)", null, function ($input) use ($attachments) {
+                if (!is_string($input) || empty($input)) return $attachments;
+                return array_map(function ($v) use ($attachments) {
+                    $i = intval($v);
+                    if ($i > count($attachments) || $i < 1) throw new \RuntimeException("invalid number " . $v);
+                    return $attachments[$i - 1];
+                }, explode(',', $input));
+            }, 3);
+        }
+
+        $files = [];
+        foreach ($attachments as $attachment) {
+            $is_image = $this->is_image($attachment);
+            $fname = normalize(Memory::cache_get('output_dir') . "/" . filter_filename("[Story] $attachment[id]." . ($is_image ? "jpg" : "mp4")));
+            if ($is_image) {
+                info("Downloading attachment $attachment[id] (image)");
+                $url = Optional::ofNullable(data_get($attachment, 'image.uri'))
+                    ->orElseThrow(fn() => new TargetMediaNotFoundException("image($attachment[id]) url not found"));
+            } else {
+                info("Downloading attachment $attachment[id] (video)");
+                $url = Optional::ofNullable(data_get($attachment, 'playable_url_quality_hd'))
+                    ->orElseNew(data_get($attachment, 'playable_url'))
+                    ->orElseThrow(fn() => new TargetMediaNotFoundException("video($attachment[id]) url not found"));
+            }
+            $files[] = ThreadedDownloader::for($url, "[Story]$attachment[id]")
+                ->validate()
+                ->saveto($fname);
+        }
+        return $files;
+    }
+
+    private function is_image($attachment)
+    {
+        if ($attachment instanceof JSONObject) {
+            return $attachment->get('__typename') !== null && $attachment->get('__typename')->value() === "Photo";
+        } else {
+            return data_get($attachment, "__typename") === "Photo";
+        }
     }
 
     /**

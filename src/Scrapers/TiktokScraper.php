@@ -8,7 +8,6 @@ use Eboubaker\Scraper\Concerns\WritesLogs;
 use Eboubaker\Scraper\Contracts\Scraper;
 use Eboubaker\Scraper\Exception\ExpectationFailedException;
 use Eboubaker\Scraper\Exception\TargetMediaNotFoundException;
-use Eboubaker\Scraper\Scrapers\Shared\ScraperUtils;
 use Eboubaker\Scraper\Tools\Cache\Memory;
 use Eboubaker\Scraper\Tools\Http\Document;
 use Eboubaker\Scraper\Tools\Http\ThreadedDownloader;
@@ -20,7 +19,7 @@ use Throwable;
  */
 final class TiktokScraper implements Scraper
 {
-    use ScraperUtils, WritesLogs;
+    use WritesLogs;
 
     public static function can_scrap(Document $document): bool
     {

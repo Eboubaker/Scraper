@@ -5,7 +5,6 @@ namespace Eboubaker\Scraper\Scrapers;
 use Eboubaker\Scraper\Concerns\WritesLogs;
 use Eboubaker\Scraper\Contracts\Scraper;
 use Eboubaker\Scraper\Exception\NotImplementedException;
-use Eboubaker\Scraper\Scrapers\Shared\ScraperUtils;
 use Eboubaker\Scraper\Tools\Http\Document;
 
 /**
@@ -13,7 +12,7 @@ use Eboubaker\Scraper\Tools\Http\Document;
  */
 final class RedditScraper implements Scraper
 {
-    use ScraperUtils, WritesLogs;
+    use WritesLogs;
 
     public static function can_scrap(Document $document): bool
     {

@@ -456,3 +456,24 @@ function get_temp_dir()
         return sys_get_temp_dir();
     }
 }
+
+/**
+ * returns the path to the temporary merged video,
+ * the file should be cleaned after copying or on errors.
+ * @throws Exception|\FFMpeg\Exception\InvalidArgumentException|\FFMpeg\Exception\RuntimeException
+ * @noinspection PhpFullyQualifiedNameUsageInspection
+ */
+function merge_video_with_audio(string $video_source, string $audio_source, string $output, \Closure $on_progress = null): void
+{
+    $ffmpeg = make_ffmpeg();
+    /** @var $vid \FFMpeg\Media\Video */
+    $vid = $ffmpeg->open($video_source);
+    $vid->addFilter(new \FFMpeg\Filters\Audio\SimpleFilter(array('-i', $audio_source, '-shortest')));
+    $format = new \Eboubaker\Scraper\Extensions\FFMpeg\X264();
+    $format->setVideoCodec('copy');
+    $format->setKiloBitrate(0);
+    if ($on_progress) {
+        $format->on('progress', fn($video, $format, $percentage) => $on_progress($percentage, $video, $format));
+    }
+    $vid->save($format, $output);
+}

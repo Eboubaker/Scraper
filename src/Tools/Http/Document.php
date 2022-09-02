@@ -8,7 +8,6 @@ use Eboubaker\Scraper\Concerns\WritesLogs;
 use Eboubaker\Scraper\Exception\ExpectationFailedException;
 use Eboubaker\Scraper\Exception\WebPageNotLoadedException;
 use Eboubaker\Scraper\Extensions\Guzzle\EffectiveUrlMiddleware;
-use Eboubaker\Scraper\Scrapers\Shared\ScraperUtils;
 use Eboubaker\Scraper\Tools\Cache\FS;
 use GuzzleHttp\Client as HttpClient;
 use GuzzleHttp\HandlerStack;
@@ -56,14 +55,14 @@ class Document
         ]);
         try {
             $response = $client->get($url, [
-                ReqOpt::HEADERS => ScraperUtils::make_curl_headers(),
+                ReqOpt::HEADERS => CurlHttp::make_curl_headers(),
                 ReqOpt::PROGRESS => fn($downloadTotal, $downloadedBytes) => printf(TTY_FLUSH . "       " . human_readable_size($downloadedBytes))
             ]);
             printf(TTY_FLUSH);
             $final_url = $response->getHeaderLine('X-GUZZLE-EFFECTIVE-URL');
             $html_document = $response->getBody()->getContents();
             $response_size = strlen($html_document);
-            make_monolog('ScraperUtils')->debug("Response size: " . $response_size . "(" . human_readable_size($response_size) . ")");
+            make_monolog('CurlHttp')->debug("Response size: " . $response_size . "(" . human_readable_size($response_size) . ")");
             if ($response_size === 0) {
                 throw new ExpectationFailedException("response size was 0");
             }

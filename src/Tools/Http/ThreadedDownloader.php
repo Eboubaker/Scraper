@@ -7,7 +7,6 @@ use Eboubaker\Scraper\App;
 use Eboubaker\Scraper\Concerns\WritesLogs;
 use Eboubaker\Scraper\Exception\ExpectationFailedException;
 use Eboubaker\Scraper\Exception\FileSystemException;
-use Eboubaker\Scraper\Scrapers\Shared\ScraperUtils;
 use Eboubaker\Scraper\Tools\Cache\FS;
 use Eboubaker\Scraper\Tools\CLI\DownloadIndicator;
 use Exception;
@@ -79,7 +78,7 @@ final class ThreadedDownloader
                 'verify' => false, // TODO: SSL
             ]);
             $response = $client->get($this->resource_url, [
-                ReqOpt::HEADERS => ScraperUtils::make_curl_headers() + [
+                ReqOpt::HEADERS => CurlHttp::make_curl_headers() + [
                         "Range" => "bytes=10-20"
                     ] + $this->append_headers,
                 ReqOpt::STREAM => true,
@@ -88,7 +87,7 @@ final class ThreadedDownloader
                 throw new ExpectationFailedException("resource url does not support chunking");
             } else {
                 $response = $client->get($this->resource_url, [
-                    ReqOpt::HEADERS => ScraperUtils::make_curl_headers(),
+                    ReqOpt::HEADERS => CurlHttp::make_curl_headers(),
                     ReqOpt::STREAM => true,
                 ]);
                 $total = (int)data_get($response->getHeader('Content-Length'), 0);
@@ -200,7 +199,7 @@ final class ThreadedDownloader
                 $this->resource_url,
                 $start,
                 $end,
-                ScraperUtils::make_curl_headers() + $this->append_headers,
+                CurlHttp::make_curl_headers() + $this->append_headers,
                 'workers_link',
                 $parts[$i],
             ]);

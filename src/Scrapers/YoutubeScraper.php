@@ -7,10 +7,10 @@ use Eboubaker\Scraper\Concerns\WritesLogs;
 use Eboubaker\Scraper\Contracts\Scraper;
 use Eboubaker\Scraper\Exception\ExpectationFailedException;
 use Eboubaker\Scraper\Exception\NotImplementedException;
-use Eboubaker\Scraper\Scrapers\Shared\ScraperUtils;
 use Eboubaker\Scraper\Tools\Cache\FS;
 use Eboubaker\Scraper\Tools\Cache\Memory;
 use Eboubaker\Scraper\Tools\CLI\ProgressIndicator;
+use Eboubaker\Scraper\Tools\Http\CurlHttp;
 use Eboubaker\Scraper\Tools\Http\Document;
 use Eboubaker\Scraper\Tools\Http\ThreadedDownloader;
 use Eboubaker\Scraper\Tools\Optional;
@@ -25,7 +25,7 @@ use Tightenco\Collect\Support\Arr;
  */
 final class YoutubeScraper implements Scraper
 {
-    use ScraperUtils, WritesLogs;
+    use WritesLogs;
 
     public static function can_scrap(Document $document): bool
     {
@@ -101,8 +101,8 @@ final class YoutubeScraper implements Scraper
                 $writer->table($arr->map(fn($v, $k) => [
                     'Number' => $k,
                     'Label' => $this->str_video_quality($v),
-                    'BitRate' => Optional::ofNullable(data_get($v, 'bitrate', null))->map(fn($v) => strtolower(human_readable_size($v, 0)) . "ps")->orElse('unknown'),
-                    'Size' => Optional::ofNullable(data_get($v, 'contentLength', null))->map(fn($v) => human_readable_size($v))->orElse('unknown')
+                    'BitRate' => Optional::ofNullable(data_get($v, 'bitrate'))->map(fn($v) => strtolower(human_readable_size($v, 0)) . "ps")->orElse('unknown'),
+                    'Size' => Optional::ofNullable(data_get($v, 'contentLength'))->map(fn($v) => human_readable_size($v))->orElse('unknown')
                 ])->all());
                 $interactor = new \Ahc\Cli\IO\Interactor();
                 $quality = $interactor->choice("Select video stream", $arr->keys()->all());
@@ -114,8 +114,8 @@ final class YoutubeScraper implements Scraper
                 $writer->write("Available audio streams:\n");
                 $writer->table($arr->map(fn($v, $k) => [
                     'Number' => $k,
-                    'BitRate' => Optional::ofNullable(data_get($v, 'bitrate', null))->map(fn($v) => strtolower(human_readable_size($v, 0)) . "ps")->orElse('unknown'),
-                    'Size' => Optional::ofNullable(data_get($v, 'contentLength', null))->map(fn($v) => human_readable_size($v))->orElse('unknown')
+                    'BitRate' => Optional::ofNullable(data_get($v, 'bitrate'))->map(fn($v) => strtolower(human_readable_size($v, 0)) . "ps")->orElse('unknown'),
+                    'Size' => Optional::ofNullable(data_get($v, 'contentLength'))->map(fn($v) => human_readable_size($v))->orElse('unknown')
                 ])->all());
                 $quality = $interactor->choice("Select audio stream", $arr->keys()->all());
                 if ($quality === null) {
@@ -166,7 +166,7 @@ final class YoutubeScraper implements Scraper
                     $audio_file = $adownloader->saveto($afile);
                     info("Merging Video with Audio");
                     $indicator = new ProgressIndicator("FFmpeg");
-                    $this->merge_video_with_audio($video_file, $audio_file, $fname, fn($percentage) => $indicator->update($percentage / 100.0));
+                    merge_video_with_audio($video_file, $audio_file, $fname, fn($percentage) => $indicator->update($percentage / 100.0));
                     $indicator->clear();
                     echo PHP_EOL;
                     return $fname;
@@ -280,7 +280,7 @@ final class YoutubeScraper implements Scraper
                         'verify' => false, // TODO: SSL
                     ]);
                     return $client->get($player_src_url, [
-                        ReqOpt::HEADERS => ScraperUtils::make_curl_headers(),
+                        ReqOpt::HEADERS => CurlHttp::make_curl_headers(),
                     ])->getBody()->getContents();
                 });
                 preg_match("/^.+?=(?<cipher>.+?)&.+?=(?<sig_query>.+?)&url=(?<url>.+)/", $stream_manifest['signatureCipher'], $matches);

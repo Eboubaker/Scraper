@@ -26,6 +26,9 @@ final class FacebookScraper implements Scraper
 {
     use WritesLogs;
 
+    private const PATTERN_REDIRECT_URL1 =
+        /** @lang RegExp */
+        "/https?:\/\/l\.facebook\.com\/l\.php\?u=(?<redirect_target>[^\/]+)/";
     private const PATTERN_VIDEO_URL1 =
         /** @lang RegExp */
         "/https?:\/\/.{1,3}\.facebook\.com\/(?<poster>[^\/]+)\/videos\/(?<video_id>\d+)/";
@@ -270,6 +273,23 @@ final class FacebookScraper implements Scraper
         return ThreadedDownloader::for($url, $doc->getFinalUrl())
             ->validate()
             ->saveto($fname);
+    }
+
+    public static function is_redirect(string $url): bool
+    {
+        return !!preg_match(self::PATTERN_REDIRECT_URL1, $url);
+    }
+
+    public static function get_redirect_target(string $url): Optional
+    {
+        preg_match(self::PATTERN_REDIRECT_URL1, $url, $matches);
+        if (!empty($matches['redirect_target'])) {
+            $target = urldecode($matches['redirect_target']);
+            if (!empty($target)) {
+                return Optional::of($target);
+            }
+        }
+        return Optional::empty();
     }
 }
 

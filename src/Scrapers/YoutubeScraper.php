@@ -27,9 +27,17 @@ final class YoutubeScraper implements Scraper
 {
     use WritesLogs;
 
+    private const PATTERN_YOUTUBE_SITE =
+        /** @lang RegExp */
+        "/https?:\/\/((m|www)\.)?youtu(be)?(-nocookie)?\.(com|be)\//";
+    private const PATTERN_REDIRECT_URL1 =
+        /** @lang RegExp */
+        "/https?:\/\/((m|www)\.)?youtu(be)?(-nocookie)?\.(com|be)\/redirect?event=(?<event>[^&]+)&redir_token=(?<token>[^&]+)&q=(?<redirect_target>[^&\/]+)/";
+
     public static function can_scrap(Document $document): bool
     {
-        return !!preg_match("/https?:\/\/((m|www)\.)?youtu(be)?(-nocookie)?\.(com|be)\//", $document->getFinalUrl());
+        // TODO: check all these formats https://gist.github.com/rodrigoborgesdeoliveira/987683cfbfcc8d800192da1e73adc486
+        return !!preg_match(self::PATTERN_YOUTUBE_SITE, $document->getFinalUrl());
     }
 
     private function get_video_id(Document $document): string
@@ -362,5 +370,22 @@ final class YoutubeScraper implements Scraper
             }
             return $cipher;
         }
+    }
+
+    public static function is_redirect(string $url): bool
+    {
+        return !!preg_match(self::PATTERN_REDIRECT_URL1, $url);
+    }
+
+    public static function get_redirect_target(string $url): Optional
+    {
+        preg_match(self::PATTERN_REDIRECT_URL1, $url, $matches);
+        if (!empty($matches['redirect_target'])) {
+            $target = urldecode($matches['redirect_target']);
+            if (!empty($target)) {
+                return Optional::of($target);
+            }
+        }
+        return Optional::empty();
     }
 }

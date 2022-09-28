@@ -6,6 +6,7 @@ use Eboubaker\Scraper\Concerns\WritesLogs;
 use Eboubaker\Scraper\Contracts\Scraper;
 use Eboubaker\Scraper\Exception\NotImplementedException;
 use Eboubaker\Scraper\Tools\Http\Document;
+use Eboubaker\Scraper\Tools\Optional;
 
 /**
  * @author Eboubaker Bekkouche <eboubakkar@gmail.com>
@@ -28,6 +29,16 @@ final class RedditScraper implements Scraper
         $data_bag = $document->getObjects();
 
         throw new NotImplementedException("Reddit scraper will be implemented soon.");
+    }
+
+    public static function is_redirect(string $url): bool
+    {
+        return false;
+    }
+
+    public static function get_redirect_target(string $url): Optional
+    {
+        return Optional::empty();
     }
 }
 

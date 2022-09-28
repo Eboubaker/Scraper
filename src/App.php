@@ -122,6 +122,19 @@ final class App
     }
 
     /**
+     * @return Scraper[]|string[] the active scrapers list
+     */
+    public static function get_available_scrapers(): array
+    {
+        return [
+            FacebookScraper::class,
+            YoutubeScraper::class,
+            RedditScraper::class,
+            TiktokScraper::class,
+        ];
+    }
+
+    /**
      * is it running inside the docker image?
      */
     public static function is_dockerized(): bool
@@ -164,9 +177,20 @@ final class App
         // escape terminal escape char '\'
         $url = str_replace('\\', '', App::args()->getArg('url', ''));
         $url = trim($url);
-
         if (empty($url)) {
             throw new InvalidArgumentException("url was not provided");
+        }
+        $redir_count = 0;
+        load_url:
+        foreach (App::get_available_scrapers() as $scraper) {
+            if ($scraper::is_redirect($url)) {
+                $scraper::get_redirect_target($url)->ifPresent(function (string $target) use (&$url) {
+                    make_monolog("Document::fromUrl")->info("obtained redirect url target $target from provided url");
+                    warn("Following redirect to $target");
+                    $url = $target;
+                    // break or not(allow override)?
+                });
+            }
         }
         info("Downloading webpage: {}", $url);
         $document = Document::fromUrl($url);
@@ -175,14 +199,7 @@ final class App
 //        info("attempting to determine which extractor to use");
         /** @var $scraper Scraper */
         $scraper = null;
-        /** @var $available_scrapers Scraper[]|string[] */
-        $available_scrapers = [
-            FacebookScraper::class,
-            YoutubeScraper::class,
-            RedditScraper::class,
-            TiktokScraper::class,
-        ];
-        foreach ($available_scrapers as $class) {
+        foreach (self::get_available_scrapers() as $class) {
             if ($class::can_scrap($document)) {
                 $scraper = new $class;
                 $cname = explode("\\", $class);
@@ -191,6 +208,12 @@ final class App
             }
         }
         if (!$scraper) {
+            if ($document->getFinalUrl() !== $url && $redir_count < 2) {
+                warn("given url is not supported but it did a redirect to another url, will attempt to use the redirect url");
+                $url = $document->getFinalUrl();
+                $redir_count++;
+                goto load_url;
+            }
             // TODO: add pr request link for new scraper
             warn("{} is probably not supported", $document->getFinalUrl());
             // TODO: add how to do login when it is implemented

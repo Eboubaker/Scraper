@@ -57,5 +57,15 @@ final class TiktokScraper implements Scraper
             ->validate()
             ->saveto($fname));
     }
+
+    public static function is_redirect(string $url): bool
+    {
+        return false;
+    }
+
+    public static function get_redirect_target(string $url): Optional
+    {
+        return Optional::empty();
+    }
 }
 

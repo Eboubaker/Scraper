@@ -5,7 +5,6 @@ namespace Eboubaker\Scraper\Tools\Http;
 use Eboubaker\JSON\JSONArray;
 use Eboubaker\JSON\JSONFinder;
 use Eboubaker\Scraper\Concerns\WritesLogs;
-use Eboubaker\Scraper\Exception\ExpectationFailedException;
 use Eboubaker\Scraper\Exception\WebPageNotLoadedException;
 use Eboubaker\Scraper\Extensions\Guzzle\EffectiveUrlMiddleware;
 use Eboubaker\Scraper\Tools\Cache\FS;
@@ -63,9 +62,9 @@ class Document
             $html_document = $response->getBody()->getContents();
             $response_size = strlen($html_document);
             make_monolog('CurlHttp')->debug("Response size: " . $response_size . "(" . human_readable_size($response_size) . ")");
-            if ($response_size === 0) {
-                throw new ExpectationFailedException("response size was 0");
-            }
+//            if ($response_size === 0) {
+//                throw new ExpectationFailedException("response size was 0");
+//            }
         } catch (\Throwable $e) {
             throw new WebPageNotLoadedException(format("Could not load webpage: {}", $url), $e);
         }

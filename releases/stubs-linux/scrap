@@ -1,2 +1,2 @@
 #!/usr/bin/env sh
-php scrapper/src/scrap.php "$@":x
+php scraper/src/scrap.php "$@":x

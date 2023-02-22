@@ -12,7 +12,7 @@ for linux you can build the tool with composer.
 an alternative is to run the tool with docker which will skip all requirements
 
 ```bash
-docker run -it --rm -v %cd%:/downloads eboubaker/scraper <args>
+docker run -it --rm -v %cd%:/downloads eboubaker/scraper <url>
 ```
 
 > Replace `%cd%` with `$(pwd)` on linux.  
